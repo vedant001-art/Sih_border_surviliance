@@ -2330,9 +2330,14 @@
                             }
                         }
                         const imgEl = document.getElementById(`tele-img-${c.camera_id}`);
-                        if (imgEl && c.feed_url && imgEl.getAttribute('data-src') !== c.feed_url) {
-                            imgEl.src = c.feed_url;
-                            imgEl.setAttribute('data-src', c.feed_url);
+                        if (imgEl && c.feed_url) {
+                            imgEl.onerror = function() {
+                                setTimeout(() => { imgEl.src = c.feed_url + '?t=' + Date.now(); }, 1500);
+                            };
+                            if (!imgEl.src || imgEl.src.includes('data:image') || imgEl.getAttribute('data-src') !== c.feed_url) {
+                                imgEl.src = c.feed_url;
+                                imgEl.setAttribute('data-src', c.feed_url);
+                            }
                         }
                         const fpsEl = document.getElementById(`tele-fps-${c.camera_id}`);
                         if (fpsEl) fpsEl.innerText = `FPS: ${c.fps}`;
@@ -2363,7 +2368,7 @@
                                 </div>
                             </div>
                             <div class="cctv-viewport">
-                                <img id="cctv-img-${c.camera_id}" src="${feedSrc}" alt="${c.camera_id}">
+                                <img id="cctv-img-${c.camera_id}" src="${feedSrc}" alt="${c.camera_id}" onerror="setTimeout(() => { this.src='${c.feed_url}?t=' + Date.now(); }, 1500);">
                             </div>
                             <div class="cctv-footer">
                                 <span id="cctv-fps-${c.camera_id}">AI: ${c.fps} FPS | SRC: ${c.source_fps}</span>
@@ -2390,9 +2395,14 @@
                             }
                         }
                         const imgEl = document.getElementById(`cctv-img-${c.camera_id}`);
-                        if (imgEl && c.feed_url && imgEl.getAttribute('data-src') !== c.feed_url) {
-                            imgEl.src = c.feed_url;
-                            imgEl.setAttribute('data-src', c.feed_url);
+                        if (imgEl && c.feed_url) {
+                            imgEl.onerror = function() {
+                                setTimeout(() => { imgEl.src = c.feed_url + '?t=' + Date.now(); }, 1500);
+                            };
+                            if (!imgEl.src || imgEl.src.includes('data:image') || imgEl.getAttribute('data-src') !== c.feed_url) {
+                                imgEl.src = c.feed_url;
+                                imgEl.setAttribute('data-src', c.feed_url);
+                            }
                         }
                         const fpsEl = document.getElementById(`cctv-fps-${c.camera_id}`);
                         if (fpsEl) fpsEl.innerText = `AI: ${c.fps} FPS | SRC: ${c.source_fps}`;

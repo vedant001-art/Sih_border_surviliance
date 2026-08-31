@@ -84,20 +84,27 @@ async def upload_video(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
+    # Ensure file buffer is completely flushed on disk
+    time.sleep(0.1)
+    
     # Verify the file is a valid video
     test_cap = cv2.VideoCapture(file_path)
     if not test_cap.isOpened():
-        os.remove(file_path)
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
         return {"status": "error", "message": "Uploaded file is not a valid video."}
     test_cap.release()
+    
     # Auto-generate a unique camera ID
-    existing_cams = [cid for cid in active_pipelines.keys() if cid.startswith("CAM-")]
+    existing_cams = set(active_pipelines.keys()).union(set(stream_manager.streams.keys()))
     next_id = 1
     while f"CAM-{next_id:02d}" in existing_cams:
         next_id += 1
     camera_id = f"CAM-{next_id:02d}"
     
-    _ensure_camera_in_db(camera_id)
+    _ensure_camera_in_db(camera_id, name=f"Upload: {safe_name}", location=f"Sector {camera_id}")
         
     success = stream_manager.add_stream(camera_id, file_path, "MP4")
     if not success:
@@ -106,8 +113,14 @@ async def upload_video(file: UploadFile = File(...)):
     pipeline = CameraPipeline(camera_id)
     pipeline.start()
     active_pipelines[camera_id] = pipeline
+    logger.info(f"Successfully ingested uploaded video as {camera_id}: {file_path}")
     
-    return {"status": "success", "message": "Video uploaded and AI pipeline started.", "camera_id": camera_id}
+    return {
+        "status": "success",
+        "message": f"Video uploaded and AI pipeline started for {camera_id}.",
+        "camera_id": camera_id,
+        "feed_url": f"/api/v1/cameras/{camera_id}/feed"
+    }
 
 @router.post("/cameras/load-example")
 async def load_example_camera():
