@@ -1905,18 +1905,15 @@
          JAVASCRIPT LOGIC & API BINDINGS
          ============================================================================== -->
     <script>
-        // Render Backend Integration for Vercel Frontend
-        const RENDER_BACKEND_URL = "https://sih-border-surveillance-backend.onrender.com";
+        // Fullstack Vercel Deployment Integration
         function resolveUrl(url) {
-            if (typeof url === 'string' && url.startsWith('/') && window.location.hostname.includes('vercel.app')) {
-                return RENDER_BACKEND_URL + url;
-            }
             return url;
         }
         const originalFetch = window.fetch;
         window.fetch = function(resource, init) {
             return originalFetch(resolveUrl(resource), init);
         };
+
 
         let currentView = 'dashboard';
         let charts = {};

@@ -1,4 +1,4 @@
-# Exclude heavy local model weights, datasets, local media, and backend Python files from Vercel deployment
+# Exclude heavy local model weights, datasets, local media, and venv from Vercel deployment
 yolov8s.pt
 yolov8n.pt
 models/
@@ -13,15 +13,6 @@ car.jpg
 border_surveillance.db*
 venv/
 .tempmediaStorage/
-backend/
-api/
-ai/
-configs/
-data/
-database/
-docker/
 Dockerfile
 docker-compose.yml
-requirements.txt
 run_demo.bat
-

@@ -1,5 +1,12 @@
-from ultralytics import YOLO
-import torch
+try:
+    from ultralytics import YOLO
+    import torch
+    HAS_PLATE_YOLO = True
+except Exception:
+    YOLO = None
+    torch = None
+    HAS_PLATE_YOLO = False
+
 from loguru import logger
 import os
 import cv2
@@ -8,26 +15,37 @@ import threading
 from typing import Optional, Dict, Any
 
 class PlateDetector:
-    _shared_models: Dict[str, YOLO] = {}
+    _shared_models: Dict[str, Any] = {}
     _shared_lock = threading.Lock()
 
     def __init__(self, model_path: str = None, conf_thresh: float = None):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+        self.device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
+        self.conf_thresh = conf_thresh or 0.25
+
+        if not HAS_PLATE_YOLO:
+            self.model = None
+            logger.info("Running in lightweight CPU fallback mode for PlateDetector.")
+            return
+
         # Auto-detect best model available
         if model_path is None:
             if os.path.exists("models/anpr_best.pt"):
                 model_path = "models/anpr_best.pt"
-                default_conf = 0.25
             elif os.path.exists("models/best.pt"):
                 model_path = "models/best.pt"
-                default_conf = 0.25
-            elif os.path.exists("models/best_epoch22_undertrained.pt"):
-                model_path = "models/best_epoch22_undertrained.pt"
-                default_conf = 0.10
             else:
-                model_path = "models/best_epoch22_undertrained.pt"
-                default_conf = 0.10
+                model_path = "yolov8n.pt"
+
+        self.model_path = model_path
+        try:
+            with PlateDetector._shared_lock:
+                if model_path not in PlateDetector._shared_models:
+                    PlateDetector._shared_models[model_path] = YOLO(model_path)
+            self.model = PlateDetector._shared_models[model_path]
+        except Exception as e:
+            logger.warning(f"Failed to load PlateDetector model ({e}). Using fallback.")
+            self.model = None
+
         else:
             default_conf = 0.10
             
@@ -48,13 +66,13 @@ class PlateDetector:
         else:
             logger.warning(f"License plate model weights '{model_path}' are required for ANPR. Plate detector is disabled.")
 
-    @torch.inference_mode()
     def detect_in_crop(self, vehicle_crop: np.ndarray, global_offset_x: int, global_offset_y: int) -> Optional[Dict[str, Any]]:
         """
         Runs plate detection inside a vehicle crop to localize the plate.
-        Returns coordinates mapped back to the global frame, or None if no plate found.
         """
-        if not self.enabled or vehicle_crop is None or vehicle_crop.size == 0:
+        if self.model is None or vehicle_crop is None or vehicle_crop.size == 0:
+            return None
+
             return None
             
         h, w = vehicle_crop.shape[:2]

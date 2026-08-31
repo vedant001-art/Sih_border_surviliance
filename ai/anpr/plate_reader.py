@@ -2,7 +2,13 @@ import os
 from loguru import logger
 import re
 import cv2
-import easyocr
+try:
+    import easyocr
+    HAS_EASYOCR = True
+except Exception:
+    easyocr = None
+    HAS_EASYOCR = False
+
 import numpy as np
 import threading
 
@@ -12,6 +18,10 @@ class ANPRSystem:
 
     def __init__(self):
         self.enabled = True
+        if not HAS_EASYOCR:
+            self.ocr = None
+            self.enabled = False
+            return
         if ANPRSystem._shared_ocr is None:
             with ANPRSystem._shared_ocr_lock:
                 if ANPRSystem._shared_ocr is None:
@@ -24,6 +34,7 @@ class ANPRSystem:
         self.ocr = ANPRSystem._shared_ocr
         if not self.ocr:
             self.enabled = False
+
 
     def validate_indian_plate(self, text: str) -> bool:
         """

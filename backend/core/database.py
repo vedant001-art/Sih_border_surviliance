@@ -4,13 +4,15 @@ from sqlalchemy.orm import sessionmaker
 from .config import settings
 
 import os
-raw_db_url = os.getenv("DATABASE_URL") or settings.DATABASE_URL
-if raw_db_url.startswith("postgres://"):
-    db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
-elif os.getenv("VERCEL"):
+if os.getenv("VERCEL"):
     db_url = "sqlite:////tmp/border_surveillance.db"
 else:
-    db_url = raw_db_url
+    raw_db_url = os.getenv("DATABASE_URL") or settings.DATABASE_URL
+    if raw_db_url.startswith("postgres://"):
+        db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
+    else:
+        db_url = raw_db_url
+
 
 engine_args = {}
 if db_url.startswith("sqlite"):

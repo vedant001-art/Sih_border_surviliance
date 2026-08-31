@@ -1,31 +1,49 @@
-import torch
-import torchvision.transforms as T
-from torchvision.models import resnet18, ResNet18_Weights
+try:
+    import torch
+    import torchvision.transforms as T
+    from torchvision.models import resnet18, ResNet18_Weights
+    HAS_TORCH = True
+except Exception:
+    torch = None
+    T = None
+    resnet18 = None
+    ResNet18_Weights = None
+    HAS_TORCH = False
+
 import numpy as np
 from loguru import logger
 import cv2
 
 class FeatureExtractor:
     def __init__(self):
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # Using ResNet18 as a lightweight ReID baseline for prototype
-        self.model = resnet18(weights=ResNet18_Weights.DEFAULT)
-        # Remove the classification head
-        self.model = torch.nn.Sequential(*(list(self.model.children())[:-1]))
-        self.model.to(self.device)
-        self.model.eval()
-        
-        self.transform = T.Compose([
-            T.ToPILImage(),
-            T.Resize((256, 128)),
+        if not HAS_TORCH:
+            self.model = None
+            return
+        try:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self.model = resnet18(weights=ResNet18_Weights.DEFAULT)
+            self.model = torch.nn.Sequential(*(list(self.model.children())[:-1]))
+            self.model.to(self.device)
+            self.model.eval()
+            self.transform = T.Compose([
+                T.ToPILImage(),
+                T.Resize((256, 128)),
+                T.ToTensor(),
+                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
+        except Exception as e:
+            logger.warning(f"Failed to initialize ReID FeatureExtractor ({e}). Running in fallback mode.")
+            self.model = None
+
             T.ToTensor(),
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         logger.info(f"ReID Feature Extractor loaded on {self.device}")
 
     def extract(self, image: np.ndarray) -> np.ndarray:
-        if image is None or image.size == 0:
-            return None
+        if self.model is None or image is None or image.size == 0:
+            return np.zeros((512,), dtype=np.float32)
+
         try:
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             tensor = self.transform(image_rgb).unsqueeze(0).to(self.device)

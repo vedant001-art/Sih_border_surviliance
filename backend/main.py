@@ -3,8 +3,12 @@ os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["OMP_NUM_THREADS"] = "2"
 
-import torch
-torch.set_num_threads(2)
+try:
+    import torch
+    torch.set_num_threads(2)
+except Exception:
+    torch = None
+
 
 import uvicorn
 from fastapi import FastAPI
@@ -63,11 +67,16 @@ async def startup_event():
     logger.info("Starting up Border Surveillance System...")
     # Initialize database connection here
     from backend.core.database import SessionLocal, Base, engine
-    from backend.models.schema import Event, Alert, Vehicle, Track, ANPRRecord, TrackPosition
-    from backend.services.entity_registry import entity_registry
     Base.metadata.create_all(bind=engine)
+
+    if os.getenv("VERCEL"):
+        logger.info("Vercel Serverless environment detected: initialized SQLite tables in /tmp.")
+        return
+
     db = SessionLocal()
     try:
+        from backend.models.schema import Event, Alert, Vehicle, Track, ANPRRecord, TrackPosition
+        from backend.services.entity_registry import entity_registry
         db.query(Alert).delete()
         db.query(Event).delete()
         db.query(ANPRRecord).delete()
@@ -81,8 +90,10 @@ async def startup_event():
         logger.error(f"Failed to clear database on startup: {e}")
     finally:
         db.close()
+
     from backend.services.db_worker import db_worker
     db_worker.start()
+
 
     # Auto-initialize CAM-01 with Example Vid if available
     try:

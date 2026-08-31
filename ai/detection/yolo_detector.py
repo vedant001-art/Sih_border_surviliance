@@ -1,5 +1,12 @@
-from ultralytics import YOLO
-import torch
+try:
+    from ultralytics import YOLO
+    import torch
+    HAS_YOLO = True
+except Exception:
+    YOLO = None
+    torch = None
+    HAS_YOLO = False
+
 import math
 from typing import List, Dict, Any
 from loguru import logger
@@ -7,9 +14,22 @@ import os
 
 class YOLODetector:
     def __init__(self, model_path: str = None, conf_thresh: float = 0.25):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.conf_thresh = conf_thresh
+        self.allowed_classes = [0, 1, 2, 3, 5, 7]
+        self.class_names = {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 5: 'bus', 7: 'truck'}
+        self.class_conf = {0: 0.40, 1: 0.30, 2: 0.18, 3: 0.35, 5: 0.30, 7: 0.30}
+        self._last_centers = {}
+        self._next_fallback_id = 1000
+
+        if not HAS_YOLO:
+            self.device = "cpu"
+            self.model = None
+            logger.info("Running in lightweight CPU fallback mode for YOLODetector.")
+            return
+
+        self.device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
         
-        # Auto-select model: prefer best.pt, yolov8s over yolov8n
+        # Auto-select model
         if model_path is None:
             if os.path.exists("models/best.pt"):
                 model_path = "models/best.pt"
@@ -21,16 +41,14 @@ class YOLODetector:
                 model_path = "yolov8n.pt"
         
         self.model_path = model_path
-        self.conf_thresh = conf_thresh
+        try:
+            logger.info(f"Initializing dedicated YOLO tracker '{model_path}' on {self.device}...")
+            self.model = YOLO(model_path)
+            self.class_names = self.model.names
+        except Exception as e:
+            logger.warning(f"Failed to load YOLO model ({e}). Using lightweight fallback detector.")
+            self.model = None
 
-        # Dedicated YOLO instance per detector so ByteTrack tracker state (persist=True) is independent per camera
-        logger.info(f"Initializing dedicated YOLO tracker '{model_path}' on {self.device}...")
-        self.model = YOLO(model_path)
-        
-        # COCO classes relevant to border surveillance
-        # 0: person, 1: bicycle, 2: car, 3: motorcycle, 5: bus, 7: truck
-        self.allowed_classes = [0, 1, 2, 3, 5, 7]
-        self.class_names = self.model.names
         
         # Track class-specific confidence thresholds
         self.class_conf = {
@@ -62,13 +80,15 @@ class YOLODetector:
         self._last_centers[best_id] = (cx, cy)
         return best_id
 
-    @torch.inference_mode()
     def detect_and_track(self, frame) -> List[Dict[str, Any]]:
         """
-        Runs YOLO detection and tracking on a single frame with agnostic NMS,
-        geometric rectification, and EMA bounding box smoothing for rock-solid tracking.
+        Runs YOLO detection and tracking on a single frame.
         """
+        if self.model is None or frame is None:
+            return []
+
         results = self.model.track(
+
             frame,
             persist=True,
             tracker="bytetrack.yaml",
