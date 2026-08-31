@@ -572,14 +572,15 @@ class CameraPipeline:
                     logger.warning(f"[{self.camera_id}] APPROACHING ALERT: {event_msg}")
 
                     db_worker.enqueue_task("CREATE_ALERT", {
+                        "type": "APPROACHING",
                         "camera_id": self.camera_id,
+                        "local_track_id": tid,
+                        "object_type": "vehicle" if is_veh else "person",
+                        "class_name": cls_name,
                         "title": event_title,
                         "message": event_msg,
                         "severity": "HIGH",
-                        "status": "NEW",
                         "timestamp": datetime.now().isoformat(),
-                        "track_id": tid,
-                        "class_name": cls_name,
                         "details": {
                             "object_type": "vehicle" if is_veh else "person",
                             "class_name": cls_name,
