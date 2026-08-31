@@ -82,26 +82,28 @@ async def serve_dashboard():
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting up Border Surveillance System...")
-    # Initialize database connection here
-    from backend.core.database import SessionLocal, Base, engine
-    from backend.models.schema import Event, Alert, Vehicle, Track, ANPRRecord, TrackPosition
-    from backend.services.entity_registry import entity_registry
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
     try:
-        db.query(Alert).delete()
-        db.query(Event).delete()
-        db.query(ANPRRecord).delete()
-        db.query(TrackPosition).delete()
-        db.query(Vehicle).delete()
-        db.query(Track).delete()
-        db.commit()
-        entity_registry.entities.clear()
-        logger.info("Completely reset SQLite database: 0 old vehicles, tracks, alerts, or events for a fresh live session.")
+        from backend.core.database import SessionLocal, Base, engine
+        from backend.models.schema import Event, Alert, Vehicle, Track, ANPRRecord, TrackPosition
+        from backend.services.entity_registry import entity_registry
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            db.query(Alert).delete()
+            db.query(Event).delete()
+            db.query(ANPRRecord).delete()
+            db.query(TrackPosition).delete()
+            db.query(Vehicle).delete()
+            db.query(Track).delete()
+            db.commit()
+            entity_registry.entities.clear()
+            logger.info("Completely reset SQLite database: 0 old vehicles, tracks, alerts, or events for a fresh live session.")
+        except Exception as e:
+            logger.error(f"Failed to clear database on startup: {e}")
+        finally:
+            db.close()
     except Exception as e:
-        logger.error(f"Failed to clear database on startup: {e}")
-    finally:
-        db.close()
+        logger.error(f"Database initialization on startup encountered exception: {e}")
 
     # Skip starting background threads on Vercel Serverless environment
     if not os.getenv("VERCEL"):
