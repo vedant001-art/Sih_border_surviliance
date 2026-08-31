@@ -3,8 +3,11 @@ os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["OMP_NUM_THREADS"] = "2"
 
-import torch
-torch.set_num_threads(2)
+try:
+    import torch
+    torch.set_num_threads(2)
+except Exception:
+    pass
 
 import uvicorn
 from fastapi import FastAPI
