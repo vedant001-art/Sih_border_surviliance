@@ -48,12 +48,13 @@ class YOLODetector:
             7: 0.25,   # truck
         }
 
-    @torch.inference_mode()
     def detect_and_track(self, frame) -> List[Dict[str, Any]]:
         """
         Runs YOLO detection and tracking on a single frame with agnostic NMS and geometric rectification.
         Returns a list of detections with tracking IDs.
         """
+        if not self.model:
+            return []
         results = self.model.track(
             frame,
             persist=True,

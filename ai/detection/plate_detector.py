@@ -16,23 +16,13 @@ class PlateDetector:
                 model_path = "models/anpr_best.pt"
                 default_conf = 0.25
             elif os.path.exists("models/best.pt"):
-                model_path = "models/best.pt"
-                default_conf = 0.25
-            elif os.path.exists("models/best_epoch22_undertrained.pt"):
-                model_path = "models/best_epoch22_undertrained.pt"
-                default_conf = 0.10
-            else:
-                model_path = "models/best_epoch22_undertrained.pt"
-                default_conf = 0.10
-        else:
-            default_conf = 0.10
-            
-        self.conf_thresh = conf_thresh if conf_thresh is not None else default_conf
+    def __init__(self, model_path: str = "models/anpr_best.pt", conf_thresh: float = 0.25):
+        self.device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
+        self.conf_thresh = conf_thresh
         self.model = None
         self.enabled = False
         
-        # Check if model exists
-        if os.path.exists(model_path):
+        if HAS_TORCH and YOLO is not None and os.path.exists(model_path):
             try:
                 logger.info(f"Loading Plate YOLO model '{model_path}' (conf={self.conf_thresh}) on {self.device}...")
                 self.model = YOLO(model_path)
@@ -40,9 +30,8 @@ class PlateDetector:
             except Exception as e:
                 logger.error(f"Failed to load plate model: {e}")
         else:
-            logger.warning(f"License plate model weights '{model_path}' are required for ANPR. Plate detector is disabled.")
+            logger.warning(f"License plate model weights or PyTorch unavailable. Plate detector is disabled.")
 
-    @torch.inference_mode()
     def detect_in_crop(self, vehicle_crop: np.ndarray, global_offset_x: int, global_offset_y: int) -> Optional[Dict[str, Any]]:
         """
         Runs plate detection inside a vehicle crop to localize the plate.
