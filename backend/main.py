@@ -39,12 +39,16 @@ import os
 app.include_router(api_router.router, prefix="/api/v1")
 app.include_router(websocket_routes.router)
 
-# Ensure static directory exists
-os.makedirs("backend/static", exist_ok=True)
-app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+INDEX_PATH = os.path.join(STATIC_DIR, "index.html")
+EVIDENCE_DIR = os.path.abspath("evidence")
 
-os.makedirs("evidence", exist_ok=True)
-app.mount("/evidence", StaticFiles(directory="evidence"), name="evidence")
+os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
+app.mount("/evidence", StaticFiles(directory=EVIDENCE_DIR), name="evidence")
 
 @app.get("/")
 @app.get("/dashboard")
@@ -55,7 +59,9 @@ app.mount("/evidence", StaticFiles(directory="evidence"), name="evidence")
 @app.get("/reports")
 @app.get("/index.html")
 async def serve_dashboard():
-    return FileResponse("backend/static/index.html")
+    if os.path.exists(INDEX_PATH):
+        return FileResponse(INDEX_PATH)
+    return {"message": "AI Border Surveillance System API Live", "version": "1.0.0"}
 
 @app.on_event("startup")
 async def startup_event():
@@ -80,31 +86,28 @@ async def startup_event():
         logger.error(f"Failed to clear database on startup: {e}")
     finally:
         db.close()
-    from backend.services.db_worker import db_worker
-    db_worker.start()
 
-    # Auto-initialize CAM-01 with Example Vid if available
-    try:
-        from video.stream_manager import stream_manager
-        from ai.pipeline import CameraPipeline
-        from backend.api.api_router import active_pipelines, _ensure_camera_in_db
-        import shutil
+    # Skip starting background threads on Vercel Serverless environment
+    if not os.getenv("VERCEL"):
+        from backend.services.db_worker import db_worker
+        db_worker.start()
 
-        example_path = os.path.abspath("uploads/example_vid.mp4")
-        if not os.path.exists(example_path):
-            source_downloads = r"C:\Users\lenovo\Downloads\pexels-casey-whalen-6571483 (2160p).mp4"
-            if os.path.exists(source_downloads):
-                shutil.copyfile(source_downloads, example_path)
+        # Auto-initialize CAM-01 with Example Vid if available
+        try:
+            from video.stream_manager import stream_manager
+            from ai.pipeline import CameraPipeline
+            from backend.api.api_router import active_pipelines, _ensure_camera_in_db
 
-        if os.path.exists(example_path):
-            _ensure_camera_in_db("CAM-01", name="Example Vid", location="Highway Traffic")
-            stream_manager.add_stream("CAM-01", example_path, "MP4")
-            pipeline = CameraPipeline("CAM-01")
-            pipeline.start()
-            active_pipelines["CAM-01"] = pipeline
-            logger.info("CAM-01 initialized with Example Vid (pexels-casey-whalen-6571483).")
-    except Exception as e:
-        logger.error(f"Failed to auto-start CAM-01 with example video: {e}")
+            example_path = os.path.abspath("uploads/example_vid.mp4")
+            if os.path.exists(example_path):
+                _ensure_camera_in_db("CAM-01", name="Example Vid", location="Highway Traffic")
+                stream_manager.add_stream("CAM-01", example_path, "MP4")
+                pipeline = CameraPipeline("CAM-01")
+                pipeline.start()
+                active_pipelines["CAM-01"] = pipeline
+                logger.info("CAM-01 initialized with Example Vid.")
+        except Exception as e:
+            logger.error(f"Failed to auto-start CAM-01 with example video: {e}")
 async def shutdown_event():
     logger.info("Shutting down Border Surveillance System...")
     # Clean up resources here
