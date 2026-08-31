@@ -81,21 +81,30 @@ async def upload_video(file: UploadFile = File(...)):
     safe_name = file.filename.replace(" ", "_") if file.filename else "video.mp4"
     file_path = os.path.join(upload_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_name}")
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        contents = await file.read()
+        if not contents or len(contents) == 0:
+            return {"status": "error", "message": "Uploaded file is empty."}
+            
+        with open(file_path, "wb") as f:
+            f.write(contents)
+    except Exception as e:
+        logger.error(f"Failed to save uploaded video file: {e}")
+        return {"status": "error", "message": f"File save error: {str(e)}"}
     
-    # Ensure file buffer is completely flushed on disk
-    time.sleep(0.1)
-    
-    # Verify the file is a valid video
+    # Verify the file is a valid video format
     test_cap = cv2.VideoCapture(file_path)
-    if not test_cap.isOpened():
-        try:
-            os.remove(file_path)
-        except Exception:
-            pass
-        return {"status": "error", "message": "Uploaded file is not a valid video."}
+    is_valid = test_cap.isOpened() and (test_cap.get(cv2.CAP_PROP_FRAME_COUNT) > 0 or test_cap.grab())
     test_cap.release()
+    
+    if not is_valid:
+        ext = os.path.splitext(safe_name)[1].lower()
+        if ext not in [".mp4", ".avi", ".mkv", ".mov", ".webm", ".h264", ".m4v", ".ts"]:
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+            return {"status": "error", "message": f"File format '{ext}' is not a valid or supported video file."}
     
     # Auto-generate a unique camera ID
     existing_cams = set(active_pipelines.keys()).union(set(stream_manager.streams.keys()))
@@ -108,7 +117,7 @@ async def upload_video(file: UploadFile = File(...)):
         
     success = stream_manager.add_stream(camera_id, file_path, "MP4")
     if not success:
-        return {"status": "error", "message": "Failed to start stream for uploaded video"}
+        return {"status": "error", "message": "Failed to start video stream for uploaded file."}
         
     pipeline = CameraPipeline(camera_id)
     pipeline.start()

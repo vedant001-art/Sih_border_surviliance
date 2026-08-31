@@ -3056,7 +3056,7 @@
                     alert(data.message || 'Ingestion failed');
                 }
             } catch(e) {
-                alert('Upload error');
+                alert('Upload error: ' + (e.message || 'Server did not respond'));
             } finally {
                 btn.innerHTML = originalText;
                 input.value = '';
