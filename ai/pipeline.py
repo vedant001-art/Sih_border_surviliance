@@ -379,12 +379,24 @@ class CameraPipeline:
 
         start_time = time.time()
         frames_rendered = 0
+        _last_rendered_id = id(None)
+        _target_fps = 30.0
 
         while self.running:
-            frame = stream.get_frame()
+            frame = stream.latest_frame
             if frame is None:
-                time.sleep(0.03)
+                time.sleep(0.033)
                 continue
+
+            # Only render when the stream has a new frame (avoids duplicate renders = less lag)
+            frame_id = id(frame)
+            if frame_id == _last_rendered_id:
+                time.sleep(0.008)
+                continue
+            _last_rendered_id = frame_id
+
+            # Adapt render rate to stream FPS to prevent CPU-induced lag
+            _target_fps = max(10.0, min(stream.fps if stream.fps > 1 else 30.0, 30.0))
 
             annotated = frame.copy()
             overlay = annotated.copy()
@@ -507,8 +519,8 @@ class CameraPipeline:
                 self.display_fps = frames_rendered / (time.time() - start_time)
                 start_time = time.time()
                 frames_rendered = 0
-                
-            time.sleep(1/30)
+
+            time.sleep(1.0 / _target_fps)
 
     def _evaluate_rules(self, detections, frame):
         # Only produce alerts when Virtual Fence feature is enabled
