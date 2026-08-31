@@ -3,11 +3,8 @@ os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["OMP_NUM_THREADS"] = "2"
 
-try:
-    import torch
-    torch.set_num_threads(2)
-except Exception:
-    pass
+import torch
+torch.set_num_threads(2)
 
 import uvicorn
 from fastapi import FastAPI
@@ -39,32 +36,12 @@ import os
 app.include_router(api_router.router, prefix="/api/v1")
 app.include_router(websocket_routes.router)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-INDEX_PATH = os.path.join(STATIC_DIR, "index.html")
-EVIDENCE_DIR = "/tmp/evidence" if os.getenv("VERCEL") else os.path.abspath("evidence")
+# Ensure static directory exists
+os.makedirs("backend/static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 
-try:
-    os.makedirs(STATIC_DIR, exist_ok=True)
-except Exception:
-    pass
-
-try:
-    os.makedirs(EVIDENCE_DIR, exist_ok=True)
-except Exception:
-    pass
-
-if os.path.exists(STATIC_DIR):
-    try:
-        app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    except Exception:
-        pass
-
-if os.path.exists(EVIDENCE_DIR):
-    try:
-        app.mount("/evidence", StaticFiles(directory=EVIDENCE_DIR), name="evidence")
-    except Exception:
-        pass
+os.makedirs("evidence", exist_ok=True)
+app.mount("/evidence", StaticFiles(directory="evidence"), name="evidence")
 
 @app.get("/")
 @app.get("/dashboard")
@@ -75,57 +52,56 @@ if os.path.exists(EVIDENCE_DIR):
 @app.get("/reports")
 @app.get("/index.html")
 async def serve_dashboard():
-    if os.path.exists(INDEX_PATH):
-        return FileResponse(INDEX_PATH)
-    return {"message": "AI Border Surveillance System API Live", "version": "1.0.0"}
+    return FileResponse("backend/static/index.html")
 
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting up Border Surveillance System...")
+    # Initialize database connection here
+    from backend.core.database import SessionLocal, Base, engine
+    from backend.models.schema import Event, Alert, Vehicle, Track, ANPRRecord, TrackPosition
+    from backend.services.entity_registry import entity_registry
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
     try:
-        from backend.core.database import SessionLocal, Base, engine
-        from backend.models.schema import Event, Alert, Vehicle, Track, ANPRRecord, TrackPosition
-        from backend.services.entity_registry import entity_registry
-        Base.metadata.create_all(bind=engine)
-        db = SessionLocal()
-        try:
-            db.query(Alert).delete()
-            db.query(Event).delete()
-            db.query(ANPRRecord).delete()
-            db.query(TrackPosition).delete()
-            db.query(Vehicle).delete()
-            db.query(Track).delete()
-            db.commit()
-            entity_registry.entities.clear()
-            logger.info("Completely reset SQLite database: 0 old vehicles, tracks, alerts, or events for a fresh live session.")
-        except Exception as e:
-            logger.error(f"Failed to clear database on startup: {e}")
-        finally:
-            db.close()
+        db.query(Alert).delete()
+        db.query(Event).delete()
+        db.query(ANPRRecord).delete()
+        db.query(TrackPosition).delete()
+        db.query(Vehicle).delete()
+        db.query(Track).delete()
+        db.commit()
+        entity_registry.entities.clear()
+        logger.info("Completely reset SQLite database: 0 old vehicles, tracks, alerts, or events for a fresh live session.")
     except Exception as e:
-        logger.error(f"Database initialization on startup encountered exception: {e}")
+        logger.error(f"Failed to clear database on startup: {e}")
+    finally:
+        db.close()
+    from backend.services.db_worker import db_worker
+    db_worker.start()
 
-    # Skip starting background threads on Vercel Serverless environment
-    if not os.getenv("VERCEL"):
-        from backend.services.db_worker import db_worker
-        db_worker.start()
+    # Auto-initialize CAM-01 with Example Vid if available
+    try:
+        from video.stream_manager import stream_manager
+        from ai.pipeline import CameraPipeline
+        from backend.api.api_router import active_pipelines, _ensure_camera_in_db
+        import shutil
 
-        # Auto-initialize CAM-01 with Example Vid if available
-        try:
-            from video.stream_manager import stream_manager
-            from ai.pipeline import CameraPipeline
-            from backend.api.api_router import active_pipelines, _ensure_camera_in_db
+        example_path = os.path.abspath("uploads/example_vid.mp4")
+        if not os.path.exists(example_path):
+            source_downloads = r"C:\Users\lenovo\Downloads\pexels-casey-whalen-6571483 (2160p).mp4"
+            if os.path.exists(source_downloads):
+                shutil.copyfile(source_downloads, example_path)
 
-            example_path = os.path.abspath("uploads/example_vid.mp4")
-            if os.path.exists(example_path):
-                _ensure_camera_in_db("CAM-01", name="Example Vid", location="Highway Traffic")
-                stream_manager.add_stream("CAM-01", example_path, "MP4")
-                pipeline = CameraPipeline("CAM-01")
-                pipeline.start()
-                active_pipelines["CAM-01"] = pipeline
-                logger.info("CAM-01 initialized with Example Vid.")
-        except Exception as e:
-            logger.error(f"Failed to auto-start CAM-01 with example video: {e}")
+        if os.path.exists(example_path):
+            _ensure_camera_in_db("CAM-01", name="Example Vid", location="Highway Traffic")
+            stream_manager.add_stream("CAM-01", example_path, "MP4")
+            pipeline = CameraPipeline("CAM-01")
+            pipeline.start()
+            active_pipelines["CAM-01"] = pipeline
+            logger.info("CAM-01 initialized with Example Vid (pexels-casey-whalen-6571483).")
+    except Exception as e:
+        logger.error(f"Failed to auto-start CAM-01 with example video: {e}")
 async def shutdown_event():
     logger.info("Shutting down Border Surveillance System...")
     # Clean up resources here

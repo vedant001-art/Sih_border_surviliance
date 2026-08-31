@@ -4,15 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from .config import settings
 
 import os
-
-if os.getenv("VERCEL"):
-    try:
-        os.makedirs("/tmp", exist_ok=True)
-    except Exception:
-        pass
-    db_url = "sqlite:////tmp/border_surveillance.db"
-else:
-    db_url = settings.DATABASE_URL
+db_url = "sqlite:////tmp/border_surveillance.db" if os.getenv("VERCEL") else settings.DATABASE_URL
 
 engine_args = {}
 if db_url.startswith("sqlite"):
@@ -22,12 +14,9 @@ engine = create_engine(db_url, **engine_args)
 
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
-    if db_url.startswith("sqlite"):
+    if settings.DATABASE_URL.startswith("sqlite"):
         cursor = dbapi_connection.cursor()
-        if os.getenv("VERCEL"):
-            cursor.execute("PRAGMA journal_mode=MEMORY")
-        else:
-            cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()

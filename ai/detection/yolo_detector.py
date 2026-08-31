@@ -1,60 +1,50 @@
+from ultralytics import YOLO
+import torch
 from typing import List, Dict, Any
 from loguru import logger
 import os
 
-try:
-    from ultralytics import YOLO
-    import torch
-    HAS_YOLO = True
-except Exception as e:
-    YOLO = None
-    torch = None
-    HAS_YOLO = False
-    logger.warning(f"YOLO / PyTorch not available in this environment: {e}")
-
 class YOLODetector:
     def __init__(self, model_path: str = None, conf_thresh: float = 0.25):
-        self.device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
-        self.model = None
-        self.conf_thresh = conf_thresh
-        self.allowed_classes = [0, 1, 2, 3, 5, 7]
-        self.class_names = {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 5: 'bus', 7: 'truck'}
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        if HAS_YOLO and YOLO is not None:
-            if model_path is None:
-                if os.path.exists("models/best.pt"):
-                    model_path = "models/best.pt"
-                elif os.path.exists("yolov8s.pt"):
-                    model_path = "yolov8s.pt"
-                elif os.path.exists("yolov8n.pt"):
-                    model_path = "yolov8n.pt"
-                else:
-                    model_path = "yolov8n.pt"
-            try:
-                logger.info(f"Loading YOLO model '{model_path}' on {self.device}...")
-                self.model = YOLO(model_path)
-                self.class_names = self.model.names
-            except Exception as ex:
-                logger.warning(f"Failed to load YOLO model: {ex}")
+        # Auto-select model: prefer yolov8s (small, more accurate) over yolov8n (nano)
+        if model_path is None:
+            if os.path.exists("models/best.pt"):
+                model_path = "models/best.pt"
+            elif os.path.exists("yolov8s.pt"):
+                model_path = "yolov8s.pt"
+            elif os.path.exists("yolov8n.pt"):
+                model_path = "yolov8n.pt"
+            else:
+                model_path = "yolov8n.pt"  # Will auto-download
+        
+        logger.info(f"Loading YOLO model '{model_path}' on {self.device}...")
+        self.model = YOLO(model_path)
+        self.conf_thresh = conf_thresh
+        
+        # COCO classes relevant to border surveillance
+        # 0: person, 1: bicycle, 2: car, 3: motorcycle, 5: bus, 7: truck
+        self.allowed_classes = [0, 1, 2, 3, 5, 7]
+        self.class_names = self.model.names
         
         # Track class-specific confidence thresholds
         # Note: Motorcycle conf is 0.45 to prevent car wheels/hoods from producing noisy motorcycle detections
         self.class_conf = {
-            0: 0.22,   # person (0.22 ensures all real people are framed)
-            1: 0.22,   # bicycle
-            2: 0.20,   # car
-            3: 0.30,   # motorcycle
-            5: 0.20,   # bus
-            7: 0.20,   # truck
+            0: 0.45,   # person (0.45 cleanly rejects asphalt texture / road markings)
+            1: 0.30,   # bicycle
+            2: 0.22,   # car
+            3: 0.45,   # motorcycle (high threshold eliminates noisy car parts misclassified as bikes)
+            5: 0.25,   # bus
+            7: 0.25,   # truck
         }
 
+    @torch.inference_mode()
     def detect_and_track(self, frame) -> List[Dict[str, Any]]:
         """
         Runs YOLO detection and tracking on a single frame with agnostic NMS and geometric rectification.
         Returns a list of detections with tracking IDs.
         """
-        if not self.model:
-            return []
         results = self.model.track(
             frame,
             persist=True,
@@ -62,7 +52,7 @@ class YOLODetector:
             stream=False,
             verbose=False,
             device=self.device,
-            conf=0.18,             # Filter weak background noise
+            conf=0.20,             # Filter weak background noise
             iou=0.45,              # IoU threshold for NMS
             agnostic_nms=True,     # Suppress overlapping boxes regardless of class
             imgsz=640,             # Standard resolution for fast inference
@@ -98,8 +88,9 @@ class YOLODetector:
                 area = bw * bh
 
                 if cls_id == 0:  # person
-                    # Filter ground texture artifacts: require minimum height bh >= 14 and aspect ratio bh >= bw * 0.55
-                    if (bh < bw * 0.55) or bh < 14:
+                    # Upright humans have vertical proportions (bh >= bw * 0.95) and minimum height (bh >= 28)
+                    # Discard horizontal boxes (road lane markings, dashed stripes, pavement seams)
+                    if (bh < bw * 0.95) or bh < 28 or bw < 12:
                         continue
                 elif cls_id in [1, 3]:  # bicycle or motorcycle
                     if bw > 175 or area > 32000 or aspect > 1.15:

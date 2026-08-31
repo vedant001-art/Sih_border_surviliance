@@ -83,9 +83,9 @@ class VideoStream:
                 except queue.Full:
                     pass
                 
-            # Smooth pacing for file streams to prevent freezing and CPU spikes
-            if self.stream_type != "WEBCAM":
-                time.sleep(0.025)
+            # If playing a file, try to respect original FPS to avoid maxing out CPU on file read
+            if self.fps > 0:
+                time.sleep(1 / (self.fps * 1.5))
             
         self.cap.release()
 
