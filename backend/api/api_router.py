@@ -254,7 +254,7 @@ async def list_cameras():
 
 async def generate_frames(camera_id: str):
     import asyncio
-    last_bytes_id = None
+    last_frame_counter = -1
     while True:
         pipeline = active_pipelines.get(camera_id)
         if not pipeline or not pipeline.running:
@@ -262,12 +262,11 @@ async def generate_frames(camera_id: str):
             continue
             
         jpeg_bytes = getattr(pipeline, 'rendered_jpeg_bytes', None)
-        if jpeg_bytes:
-            cur_id = id(jpeg_bytes)
-            if cur_id != last_bytes_id:
-                last_bytes_id = cur_id
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + jpeg_bytes + b'\r\n')
+        cur_counter = getattr(pipeline, 'rendered_frame_counter', 0)
+        if jpeg_bytes and cur_counter != last_frame_counter:
+            last_frame_counter = cur_counter
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg_bytes + b'\r\n')
         await asyncio.sleep(0.015)
 
 @router.get("/cameras/{camera_id}/feed")
@@ -619,7 +618,7 @@ def resolve_alert(alert_id: int):
         db.close()
 
 @router.get("/cameras")
-def get_cameras():
+async def get_cameras():
     db = SessionLocal()
     try:
         return db.query(Camera).all()
@@ -631,7 +630,7 @@ def get_cameras():
 # ==============================================================================
 
 @router.get("/dashboard/summary")
-def get_dashboard_summary():
+async def get_dashboard_summary():
     from backend.services.entity_registry import entity_registry
     db = SessionLocal()
     try:
@@ -662,7 +661,7 @@ def get_dashboard_summary():
         db.close()
 
 @router.get("/dashboard/vehicles")
-def get_dashboard_vehicles(limit: int = 50, offset: int = 0):
+async def get_dashboard_vehicles(limit: int = 50, offset: int = 0):
     db = SessionLocal()
     try:
         # 1. Identify active tracks currently detected in the live camera frame

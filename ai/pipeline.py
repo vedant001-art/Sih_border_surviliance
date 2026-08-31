@@ -43,6 +43,8 @@ class CameraPipeline:
         self.latest_detections = []
         self.latest_faces = []
         self.rendered_frame = None
+        self.rendered_jpeg_bytes = None
+        self.rendered_frame_counter = 0
         
         # Metrics
         self.ai_fps = 0.0
@@ -519,6 +521,7 @@ class CameraPipeline:
             ret, buf = cv2.imencode('.jpg', encode_img, [cv2.IMWRITE_JPEG_QUALITY, 60])
             if ret:
                 self.rendered_jpeg_bytes = buf.tobytes()
+                self.rendered_frame_counter += 1
             self.rendered_frame = annotated
             
             frames_rendered += 1

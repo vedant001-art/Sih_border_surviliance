@@ -33,18 +33,19 @@ class ANPRSystem:
         # Remove spaces and non-alphanumeric chars
         text = re.sub(r'[^A-Z0-9]', '', text.upper())
         
-        # High confidence match (State code + Number)
-        pattern = r'^[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}$'
-        if re.match(pattern, text):
-            return True
+        # Indian standard formats (MH12AB1234, KA05CD6789, DL3C1234, 22BH1234A)
+        ind_patterns = [
+            r'^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$',
+            r'^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$',
+            r'^[A-Z]{2}[0-9]{1,2}[0-9]{4}$'
+        ]
+        for pat in ind_patterns:
+            if re.match(pat, text):
+                return True
             
-        # Loose match for partial plates (At least 6 alphanumeric characters)
-        loose_pattern = r'^[A-Z0-9]{6,10}$'
-        if re.match(loose_pattern, text):
-            # Check if it has both letters and numbers
-            has_letters = bool(re.search(r'[A-Z]', text))
-            has_numbers = bool(re.search(r'[0-9]', text))
-            return has_letters and has_numbers
+        # Flexible match for short/partial or numeric-only plates (3 to 10 alphanumeric characters)
+        if 3 <= len(text) <= 10 and re.match(r'^[A-Z0-9]+$', text):
+            return True
             
         return False
 

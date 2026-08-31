@@ -2,7 +2,7 @@ import time
 from typing import Dict, Any, Optional
 
 class TemporalANPRFusion:
-    def __init__(self, cooldown_seconds: float = 2.0, max_history: int = 10):
+    def __init__(self, cooldown_seconds: float = 0.3, max_history: int = 15):
         # track_id -> list of observation dicts
         self.history: Dict[int, list] = {}
         # track_id -> dict with best plate info
