@@ -97,8 +97,12 @@ async def start_camera(req: StartStreamRequest):
 # NOTE: /cameras/upload must come BEFORE /cameras/{camera_id}/stop to avoid routing conflict
 @router.post("/cameras/upload")
 async def upload_video(file: UploadFile = File(...)):
-    upload_dir = os.path.abspath("uploads")
-    os.makedirs(upload_dir, exist_ok=True)
+    upload_dir = os.path.abspath("/tmp/uploads" if os.getenv("VERCEL") else "uploads")
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+    except Exception:
+        pass
+
     
     safe_name = file.filename.replace(" ", "_") if file.filename else "video.mp4"
     file_path = os.path.join(upload_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_name}")

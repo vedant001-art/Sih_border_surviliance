@@ -4,8 +4,13 @@ import re
 from typing import List, Set
 from loguru import logger
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+if os.getenv("VERCEL"):
+    DATA_DIR = "/tmp/data"
+else:
+    DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+
 PLATES_FILE = os.path.join(DATA_DIR, "authorized_plates.json")
+
 
 # Default whitelist samples
 DEFAULT_PLATES = [

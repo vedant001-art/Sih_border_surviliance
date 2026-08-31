@@ -44,12 +44,22 @@ import os
 app.include_router(api_router.router, prefix="/api/v1")
 app.include_router(websocket_routes.router)
 
-# Ensure static directory exists
-os.makedirs("backend/static", exist_ok=True)
-app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+# Ensure static and evidence directories exist (safe for read-only serverless filesystem)
+try:
+    os.makedirs("backend/static", exist_ok=True)
+    if os.path.exists("backend/static"):
+        app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+except Exception as e:
+    logger.warning(f"Static directory mounting skipped: {e}")
 
-os.makedirs("evidence", exist_ok=True)
-app.mount("/evidence", StaticFiles(directory="evidence"), name="evidence")
+try:
+    evidence_dir = "/tmp/evidence" if os.getenv("VERCEL") else "evidence"
+    os.makedirs(evidence_dir, exist_ok=True)
+    if os.path.exists(evidence_dir):
+        app.mount("/evidence", StaticFiles(directory=evidence_dir), name="evidence")
+except Exception as e:
+    logger.warning(f"Evidence directory mounting skipped: {e}")
+
 
 @app.get("/")
 @app.get("/dashboard")

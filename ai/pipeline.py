@@ -39,8 +39,13 @@ class CameraPipeline:
         import os
         self.plate_detector = PlateDetector()
         self.anpr_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        os.makedirs("evidence/plates", exist_ok=True)
-        os.makedirs("evidence/vehicles", exist_ok=True)
+        try:
+            ev_dir = "/tmp/evidence" if os.getenv("VERCEL") else "evidence"
+            os.makedirs(f"{ev_dir}/plates", exist_ok=True)
+            os.makedirs(f"{ev_dir}/vehicles", exist_ok=True)
+        except Exception:
+            pass
+
         
         self.running = False
         self.ai_thread = None

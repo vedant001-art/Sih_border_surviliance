@@ -4,9 +4,15 @@ from loguru import logger
 from datetime import datetime
 
 class EvidenceCapture:
-    def __init__(self, output_dir: str = "evidence"):
+    def __init__(self, output_dir: str = None):
+        if output_dir is None:
+            output_dir = "/tmp/evidence" if os.getenv("VERCEL") else "evidence"
         self.output_dir = output_dir
-        os.makedirs(self.output_dir, exist_ok=True)
+        try:
+            os.makedirs(self.output_dir, exist_ok=True)
+        except Exception:
+            pass
+
         
     def save_clip(self, camera_id: str, event_id: int, frames: list, fps: float = 30.0) -> str:
         """
