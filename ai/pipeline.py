@@ -472,10 +472,6 @@ class CameraPipeline:
                         cv2.polylines(overlay, [pts], False, trail_color, trail_thick_bg, cv2.LINE_AA)
                         cv2.polylines(annotated, [pts], False, (255, 255, 255), trail_thick_fg, cv2.LINE_AA)
                     
-                    if len(valid_trail) >= 1:
-                        cv2.circle(overlay, valid_trail[-1], max(4, int(5 * scale)), trail_color, -1)
-                        cv2.circle(annotated, valid_trail[0], max(4, int(5 * scale)), (255, 255, 255), -1)
-                    
                 is_vehicle = det.get("is_vehicle", False)
                 color = (255, 180, 0) if is_vehicle else (0, 255, 0)
                 
@@ -525,19 +521,7 @@ class CameraPipeline:
                         y_offset -= (th + int(10 * scale))
                     else:
                         y_offset += (th + int(10 * scale))
-                    
-                # Draw Plate Box if available
-                if is_vehicle and tid in self._plate_cache:
-                    p_info = self._plate_cache[tid]
-                    if "bbox" in p_info:
-                        px1, py1, px2, py2 = p_info["bbox"]
-                        px1 = max(0, min(w_img - 1, px1))
-                        py1 = max(0, min(h_img - 1, py1))
-                        px2 = max(0, min(w_img - 1, px2))
-                        py2 = max(0, min(h_img - 1, py2))
-                        if (px2 - px1) > 10 and (py2 - py1) > 5:
-                            cv2.rectangle(annotated, (px1, py1), (px2, py2), (0, 165, 255), max(2, int(2*scale)))
-                            cv2.putText(annotated, "PLATE", (px1, max(15, py1 - int(5*scale))), cv2.FONT_HERSHEY_SIMPLEX, 0.5 * scale, (0, 165, 255), max(1, int(1.5*scale)))
+
 
             # Apply overlay blend for transparent fence & glowing trajectory ribbons
             cv2.addWeighted(overlay, 0.25, annotated, 0.75, 0, annotated)
