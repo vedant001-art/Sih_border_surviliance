@@ -1,0 +1,14 @@
+# Exclude heavy local model weights, datasets, and local media from Vercel function bundle
+yolov8s.pt
+yolov8n.pt
+models/
+dataset/
+evidence/
+uploads/
+scratch/
+scripts/
+test_*.py
+car.jpg
+border_surveillance.db*
+venv/
+.tempmediaStorage/

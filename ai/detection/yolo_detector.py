@@ -1,32 +1,41 @@
-from ultralytics import YOLO
-import torch
 from typing import List, Dict, Any
 from loguru import logger
 import os
 
+try:
+    from ultralytics import YOLO
+    import torch
+    HAS_YOLO = True
+except Exception as e:
+    YOLO = None
+    torch = None
+    HAS_YOLO = False
+    logger.warning(f"YOLO / PyTorch not available in this environment: {e}")
+
 class YOLODetector:
     def __init__(self, model_path: str = None, conf_thresh: float = 0.25):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        
-        # Auto-select model: prefer yolov8s (small, more accurate) over yolov8n (nano)
-        if model_path is None:
-            if os.path.exists("models/best.pt"):
-                model_path = "models/best.pt"
-            elif os.path.exists("yolov8s.pt"):
-                model_path = "yolov8s.pt"
-            elif os.path.exists("yolov8n.pt"):
-                model_path = "yolov8n.pt"
-            else:
-                model_path = "yolov8n.pt"  # Will auto-download
-        
-        logger.info(f"Loading YOLO model '{model_path}' on {self.device}...")
-        self.model = YOLO(model_path)
+        self.device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
+        self.model = None
         self.conf_thresh = conf_thresh
-        
-        # COCO classes relevant to border surveillance
-        # 0: person, 1: bicycle, 2: car, 3: motorcycle, 5: bus, 7: truck
         self.allowed_classes = [0, 1, 2, 3, 5, 7]
-        self.class_names = self.model.names
+        self.class_names = {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 5: 'bus', 7: 'truck'}
+        
+        if HAS_YOLO and YOLO is not None:
+            if model_path is None:
+                if os.path.exists("models/best.pt"):
+                    model_path = "models/best.pt"
+                elif os.path.exists("yolov8s.pt"):
+                    model_path = "yolov8s.pt"
+                elif os.path.exists("yolov8n.pt"):
+                    model_path = "yolov8n.pt"
+                else:
+                    model_path = "yolov8n.pt"
+            try:
+                logger.info(f"Loading YOLO model '{model_path}' on {self.device}...")
+                self.model = YOLO(model_path)
+                self.class_names = self.model.names
+            except Exception as ex:
+                logger.warning(f"Failed to load YOLO model: {ex}")
         
         # Track class-specific confidence thresholds
         # Note: Motorcycle conf is 0.45 to prevent car wheels/hoods from producing noisy motorcycle detections
