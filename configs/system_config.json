@@ -1,0 +1,14 @@
+{
+  "system_name": "AI Border Surveillance & C2 Command System",
+  "version": "1.0.0",
+  "camera_defaults": {
+    "fps": 30,
+    "anpr_enabled": true,
+    "virtual_fence_enabled": true,
+    "face_reid_enabled": true
+  },
+  "alerts": {
+    "buffer_cooldown_seconds": 5.0,
+    "proximity_warning_buffer_pixels": 55
+  }
+}
