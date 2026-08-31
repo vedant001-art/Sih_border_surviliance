@@ -12,3 +12,5 @@ shapely
 passlib[bcrypt]
 requests
 websockets
+Levenshtein
+
