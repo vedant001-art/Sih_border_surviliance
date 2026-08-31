@@ -479,41 +479,24 @@ class CameraPipeline:
                 cv2.line(annotated, (x2, y2), (x2-corner_len, y2), color, box_thick)
                 cv2.line(annotated, (x2, y2), (x2, y2-corner_len), color, box_thick)
                 
-                # Position Info Panel: If near top of screen (y1 < 75), render BELOW y2 to prevent box overflow off-screen!
-                draw_above = y1 >= int(75 * scale)
-                y_offset = y1 - int(10 * scale) if draw_above else y2 + int(15 * scale)
-                
+                # Position Info Panel: Render a single compact dark banner line above/below bounding box
+                draw_above = y1 >= int(60 * scale)
                 if is_vehicle:
                     plate = self._plate_cache.get(tid, {}).get("plate", "SCANNING...")
                     v_type = det.get('type') or det.get('class_name', 'Vehicle').capitalize()
-                    info_lines = [
-                        f"TRACK #{tid} | {v_type}",
-                        f"PLATE: {plate}",
-                        f"SPD: {det.get('speed_kmh', 0):.0f}km/h {det.get('heading', '')}"
-                    ]
+                    label_text = f"#{tid} {v_type} | PLATE: {plate} | {det.get('speed_kmh', 0):.0f}km/h"
                 else:
-                    info_lines = [
-                        f"TRACK #{tid} | {det.get('name', 'Subject')}",
-                        f"{det.get('clearance', 'UNVERIFIED')}",
-                        f"{det.get('clothing', '')}"
-                    ]
-                    
-                line_order = reversed(info_lines) if draw_above else info_lines
-                for text in line_order:
-                    if not text.strip(): continue
-                    (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thick)
-                    box_x1 = max(5, min(w_img - tw - int(12 * scale), x1))
-                    box_y1 = max(5, min(h_img - th - int(10 * scale), y_offset - th - int(6 * scale))) if draw_above else max(5, min(h_img - th - int(10 * scale), y_offset))
-                    box_x2 = min(w_img - 2, box_x1 + tw + int(8 * scale))
-                    box_y2 = min(h_img - 2, box_y1 + th + int(10 * scale))
-                    
-                    cv2.rectangle(annotated, (box_x1, box_y1), (box_x2, box_y2), (15, 18, 24), -1)
-                    cv2.rectangle(annotated, (box_x1, box_y1), (box_x2, box_y2), color, 1)
-                    cv2.putText(annotated, text, (box_x1 + int(4 * scale), box_y1 + th + int(2 * scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), font_thick)
-                    if draw_above:
-                        y_offset -= (th + int(10 * scale))
-                    else:
-                        y_offset += (th + int(10 * scale))
+                    label_text = f"#{tid} {det.get('name', 'Subject')} | {det.get('clearance', 'UNVERIFIED')}"
+
+                (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale * 0.85, font_thick)
+                lbl_x1 = max(5, min(w_img - tw - 10, x1))
+                lbl_y1 = max(5, y1 - th - int(8 * scale)) if draw_above else min(h_img - th - 5, y2 + int(12 * scale))
+                lbl_x2 = min(w_img - 2, lbl_x1 + tw + int(10 * scale))
+                lbl_y2 = min(h_img - 2, lbl_y1 + th + int(6 * scale))
+
+                cv2.rectangle(annotated, (lbl_x1, lbl_y1), (lbl_x2, lbl_y2), (15, 18, 24), -1)
+                cv2.rectangle(annotated, (lbl_x1, lbl_y1), (lbl_x2, lbl_y2), color, 1)
+                cv2.putText(annotated, label_text, (lbl_x1 + int(4 * scale), lbl_y1 + th + int(2 * scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale * 0.85, (255, 255, 255), font_thick)
 
 
             # Apply overlay blend for transparent fence & glowing trajectory ribbons

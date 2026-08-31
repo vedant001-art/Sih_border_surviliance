@@ -1,5 +1,6 @@
 from ultralytics import YOLO
 import torch
+import math
 from typing import List, Dict, Any
 from loguru import logger
 import os
@@ -33,19 +34,38 @@ class YOLODetector:
         
         # Track class-specific confidence thresholds
         self.class_conf = {
-            0: 0.45,   # person
+            0: 0.40,   # person
             1: 0.30,   # bicycle
-            2: 0.20,   # car (0.20 ensures all cars in frame are tracked simultaneously)
-            3: 0.40,   # motorcycle
+            2: 0.18,   # car (0.18 ensures all vehicles in frame are detected & tracked)
+            3: 0.35,   # motorcycle
             5: 0.25,   # bus
             7: 0.25,   # truck
         }
+        
+        self._fallback_id_counter = 1
+        self._last_centers: Dict[int, tuple] = {}
+
+    def _assign_fallback_track_id(self, cx: float, cy: float) -> int:
+        best_id = None
+        min_dist = 100.0  # max 100px movement threshold
+        for tid, (last_x, last_y) in self._last_centers.items():
+            dist = math.hypot(cx - last_x, cy - last_y)
+            if dist < min_dist:
+                min_dist = dist
+                best_id = tid
+        
+        if best_id is None:
+            best_id = self._fallback_id_counter
+            self._fallback_id_counter += 1
+            
+        self._last_centers[best_id] = (cx, cy)
+        return best_id
 
     @torch.inference_mode()
     def detect_and_track(self, frame) -> List[Dict[str, Any]]:
         """
         Runs YOLO detection and tracking on a single frame with agnostic NMS and geometric rectification.
-        Returns a list of detections with tracking IDs.
+        Guarantees that every detected object receives a valid track ID.
         """
         results = self.model.track(
             frame,
@@ -54,18 +74,19 @@ class YOLODetector:
             stream=False,
             verbose=False,
             device=self.device,
-            conf=0.15,             # Low confidence threshold so all vehicles in frame are detected
-            iou=0.45,              # IoU threshold for NMS
-            agnostic_nms=True,     # Suppress overlapping boxes regardless of class
-            imgsz=640,             # Standard resolution for fast inference
+            conf=0.15,
+            iou=0.45,
+            agnostic_nms=True,
+            imgsz=640,
         )
         raw_detections = []
         
         for result in results:
             boxes = result.boxes
-            if boxes is None or boxes.id is None:
+            if boxes is None or len(boxes) == 0:
                 continue
                 
+            has_track_ids = boxes.id is not None
             for i, box in enumerate(boxes):
                 conf = float(box.conf[0])
                 cls_id = int(box.cls[0])
@@ -73,13 +94,19 @@ class YOLODetector:
                 if cls_id not in self.allowed_classes:
                     continue
                 
-                # Per-class confidence filtering
                 min_conf = self.class_conf.get(cls_id, self.conf_thresh)
                 if conf < min_conf:
                     continue
-                    
-                track_id = int(boxes.id[i])
+
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
+                cx = (x1 + x2) / 2.0
+                cy = (y1 + y2) / 2.0
+                
+                if has_track_ids and i < len(boxes.id):
+                    track_id = int(boxes.id[i])
+                    self._last_centers[track_id] = (cx, cy)
+                else:
+                    track_id = self._assign_fallback_track_id(cx, cy)
                 
                 cls_name = self.class_names.get(cls_id, f"class_{cls_id}")
                 
@@ -90,8 +117,7 @@ class YOLODetector:
                 area = bw * bh
 
                 if cls_id == 0:  # person
-                    # Upright humans have vertical proportions (bh >= bw * 0.95) and minimum height (bh >= 28)
-                    if (bh < bw * 0.95) or bh < 28 or bw < 12:
+                    if (bh < bw * 0.90) or bh < 24 or bw < 10:
                         continue
                 elif cls_id in [1, 3]:  # bicycle or motorcycle
                     if bw > 175 or area > 32000 or aspect > 1.15:
@@ -102,11 +128,9 @@ class YOLODetector:
                         cls_id = 2
                         cls_name = "car"
                 
-                # Determine if this is a vehicle type
                 is_vehicle = cls_id in [1, 2, 3, 5, 7]
                 
-                # Filter out microscopic noise (allow immediate tracking as soon as object enters frame)
-                if bw < 10 or bh < 10:
+                if bw < 8 or bh < 8:
                     continue
 
                 raw_detections.append({
@@ -118,8 +142,7 @@ class YOLODetector:
                     "is_vehicle": is_vehicle,
                 })
         
-        # Inter-class overlap resolution: If a motorcycle detection is largely contained inside a car detection,
-        # suppress the motorcycle to prevent duplicate/ghost bike detections on top of cars.
+        # Inter-class overlap resolution
         car_boxes = [d["bbox"] for d in raw_detections if d["class_name"] == "car"]
         final_detections = []
         for d in raw_detections:
@@ -138,7 +161,7 @@ class YOLODetector:
                             contained_in_car = True
                             break
                 if contained_in_car:
-                    continue  # Suppress ghost motorcycle detection on car
+                    continue
             final_detections.append(d)
                 
         return final_detections
