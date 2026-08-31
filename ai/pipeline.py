@@ -317,16 +317,9 @@ class CameraPipeline:
                 if det.get("is_vehicle", False):
                     tid = det["track_id"]
                     # Skip OCR if plate is already confirmed with good confidence
-                    if tid in self._plate_cache and self._plate_cache[tid].get("conf", 0) >= 0.40:
-                        continue
-                    # Limit to max 3 OCR passes per vehicle track to prevent CPU hogging
-                    attempts = getattr(self, 'track_ocr_attempts', {}).get(tid, 0)
-                    if attempts >= 3:
+                    if tid in self._plate_cache and self._plate_cache[tid].get("conf", 0) >= 0.35:
                         continue
                     if anpr_fusion.can_run_ocr(tid):
-                        if not hasattr(self, 'track_ocr_attempts'):
-                            self.track_ocr_attempts = {}
-                        self.track_ocr_attempts[tid] = attempts + 1
                         anpr_fusion.last_ocr_time[tid] = now
                         self.anpr_executor.submit(process_anpr_async, det, frame.copy(), now)
             
