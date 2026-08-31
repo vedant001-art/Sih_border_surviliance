@@ -3,11 +3,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from .config import settings
 
+import os
+db_url = "sqlite:////tmp/border_surveillance.db" if os.getenv("VERCEL") else settings.DATABASE_URL
+
 engine_args = {}
-if settings.DATABASE_URL.startswith("sqlite"):
+if db_url.startswith("sqlite"):
     engine_args["connect_args"] = {"check_same_thread": False, "timeout": 15}
 
-engine = create_engine(settings.DATABASE_URL, **engine_args)
+engine = create_engine(db_url, **engine_args)
 
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
