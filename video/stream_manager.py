@@ -17,6 +17,7 @@ class VideoStream:
         self.latest_frame = None
         self.latest_annotated_frame = None
         self.fps = 0
+        self.frame_counter = 0
         self.rolling_buffer = collections.deque(maxlen=150) # Keep last ~5s at 30fps
 
     def start(self):
@@ -67,6 +68,7 @@ class VideoStream:
                 start_time = time.time()
                 frame_count = 0
                 
+            self.frame_counter += 1
             self.latest_frame = frame.copy()
             self.rolling_buffer.append(self.latest_frame)
             

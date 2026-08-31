@@ -390,21 +390,21 @@ class CameraPipeline:
 
         start_time = time.time()
         frames_rendered = 0
-        _last_rendered_id = id(None)
+        _last_rendered_counter = -1
         _target_fps = 30.0
 
         while self.running:
             frame = stream.latest_frame
             if frame is None:
-                time.sleep(0.033)
+                time.sleep(0.02)
                 continue
 
-            # Only render when the stream has a new frame (avoids duplicate renders = less lag)
-            frame_id = id(frame)
-            if frame_id == _last_rendered_id:
-                time.sleep(0.008)
+            # Check exact frame counter to prevent PyObject id reuse from dropping frames
+            current_counter = getattr(stream, 'frame_counter', 0)
+            if current_counter == _last_rendered_counter:
+                time.sleep(0.005)
                 continue
-            _last_rendered_id = frame_id
+            _last_rendered_counter = current_counter
 
             # Adapt render rate to stream FPS to prevent CPU-induced lag
             _target_fps = max(10.0, min(stream.fps if stream.fps > 1 else 30.0, 30.0))
@@ -462,7 +462,7 @@ class CameraPipeline:
                     for p in rev_hist:
                         px = int(max(2, min(w_img - 2, p[0])))
                         py = int(max(2, min(h_img - 2, p[1])))
-                        if not valid_trail or np.hypot(px - valid_trail[-1][0], py - valid_trail[-1][1]) < (150 * scale):
+                        if not valid_trail or np.hypot(px - valid_trail[-1][0], py - valid_trail[-1][1]) < (350 * scale):
                             valid_trail.append((px, py))
                         else:
                             break
