@@ -275,12 +275,14 @@ class CameraPipeline:
                             if tid in self.track_class_votes:
                                 self.track_class_votes[tid].append("car")
                                 
-                            self._plate_cache[tid] = {
+                            cache_entry = {
                                 "plate": final_text,
                                 "conf": fused_plate["confidence"],
-                                "last_seen": now,
-                                "bbox": plate_bbox or [x1, y1, x2, y2]
+                                "last_seen": now
                             }
+                            if plate_det and "bbox" in plate_det:
+                                cache_entry["bbox"] = plate_det["bbox"]
+                            self._plate_cache[tid] = cache_entry
                             g_ent = entity_registry.entities.get(g_id)
                             if g_ent:
                                 g_ent.update({"plate": final_text, "class_name": "car", "type": "Car"})
@@ -598,7 +600,7 @@ class CameraPipeline:
                         self.authorized_tracks.add(tid)
                         continue
 
-                    plate_disp = plate if plate else f"IND-P{tid:04d}"
+                    plate_disp = plate if plate else "UNREADABLE"
                     event_title = f"APPROACHING RESTRICTED ZONE: {cls_name.upper()} #{tid}"
                     event_msg = f"WARNING: Trajectory of {cls_name.upper()} #{tid} (Plate: {plate_disp}) is approaching Restricted Sector {zone}."
                     logger.warning(f"[{self.camera_id}] APPROACHING ALERT: {event_msg}")
@@ -645,7 +647,7 @@ class CameraPipeline:
                         continue
 
                     # 4. Trigger alert for unauthorized or unregistered vehicle breach
-                    plate_disp = plate if plate else f"IND-P{tid:04d}"
+                    plate_disp = plate if plate else "UNREADABLE"
                     event_title = f"UNAUTHORIZED VEHICLE: {cls_name.upper()} #{tid}"
                     event_msg = f"UNAUTHORIZED {cls_name.upper()} #{tid} (Plate: {plate_disp}) crossed Virtual Fence into {zone}."
                     logger.warning(f"[{self.camera_id}] SECURITY ALERT: {event_msg}")

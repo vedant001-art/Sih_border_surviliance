@@ -653,9 +653,7 @@ def get_dashboard_vehicles(limit: int = 50, offset: int = 0):
             direction = "INBOUND" if (v.id % 2 == 0) else "OUTBOUND"
             
             loc_tid = track.local_track_id if track else (v.track_id or v.id)
-            plate_val = v.plate_number
-            if not plate_val or plate_val == "UNREADABLE":
-                plate_val = f"IND-P{loc_tid:04d}"
+            plate_val = v.plate_number if v.plate_number else "UNREADABLE"
                 
             results.append({
                 "id": v.id,
@@ -673,6 +671,33 @@ def get_dashboard_vehicles(limit: int = 50, offset: int = 0):
                 "status": v.status or "Completed",
                 "confidence": f"{int((v.plate_confidence or 0.85) * 100)}%"
             })
+            
+        # Supplement with active in-memory vehicles from active_pipelines so all live tracks appear immediately
+        db_track_tids = {r["track_id"] for r in results if isinstance(r.get("track_id"), int)}
+        for cam_id, pipeline in active_pipelines.items():
+            for det in getattr(pipeline, 'latest_detections', []):
+                if det.get("is_vehicle"):
+                    tid = det["track_id"]
+                    if tid not in db_track_tids:
+                        db_track_tids.add(tid)
+                        plate_val = pipeline._plate_cache.get(tid, {}).get("plate", "SCANNING...")
+                        v_type = det.get('type') or det.get('class_name', 'Vehicle').capitalize()
+                        results.insert(0, {
+                            "id": f"active_{cam_id}_{tid}",
+                            "track_id": tid,
+                            "vehicle_type": v_type,
+                            "plate_number": plate_val,
+                            "plate_confidence": 0.90,
+                            "camera_id": cam_id,
+                            "location": f"Gate {cam_id}",
+                            "first_seen": datetime.now().strftime("%H:%M:%S"),
+                            "last_seen": datetime.now().strftime("%H:%M:%S"),
+                            "duration": "Active",
+                            "direction": det.get("heading") or "INBOUND",
+                            "speed": f"{int(det.get('speed_kmh', 35))} km/h",
+                            "status": "ACTIVE",
+                            "confidence": f"{int(det.get('confidence', 0.85)*100)}%"
+                        })
         return results
     finally:
         db.close()
