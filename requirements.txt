@@ -1,0 +1,36 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+sqlalchemy
+psycopg2-binary
+asyncpg
+redis
+websockets
+ultralytics
+opencv-python
+opencv-python-headless
+python-multipart
+python-dotenv
+ffmpeg-python
+loguru
+insightface
+onnxruntime
+# paddleocr is heavy, we'll install it, paddlepaddle might require specific builds based on OS
+paddlepaddle
+paddleocr
+filterpy
+lapx
+cython
+# NOTE FOR WINDOWS USERS:
+# The standard 'torch' installation below only installs the CPU version on Windows!
+# To enable GPU acceleration (CUDA 11.8/12.1), you MUST run this command manually:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+torch
+torchvision
+torchaudio
+numpy
+scipy
+requests
+passlib[bcrypt]
+python-jose[cryptography]

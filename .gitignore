@@ -1,0 +1,31 @@
+# Environment & virtual environments
+venv/
+env/
+ENV/
+.env
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Databases, logs & binary weights
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.log
+*.pt
+*.onnx
+*.engine
+
+# Temp files & media
+.tempmediaStorage/
+.vscode/
+.idea/
+.DS_Store
+uploads/
+evidence/
+dataset/

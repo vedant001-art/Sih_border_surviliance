@@ -1,0 +1,17 @@
+Line 1187: <span style="color:var(--status-green); font-weight:700;">● LIVE</span>
+Line 1380: <span class="mono" style="color:var(--status-green); font-size:10px;">● WS CONNECTED</span>
+Line 1409: <button class="btn-action" id="fenceArmToggleBtn" onclick="toggleVirtualFence()" style="font-size: 11px; height: 28px; color: var(--status-green); font-weight:700; padding: 0 10px;">● ARMED</button>
+Line 1769: <span class="mono" style="font-size:10px; color:var(--status-green);">● ACTIVE SQLITE ARCHIVE</span>
+Line 1840: <span class="mono" style="cursor:pointer;" onclick="closeModal('vehicleModal')">✕</span>
+Line 1853: <span class="mono" style="cursor:pointer;" onclick="closeModal('alertModal')">✕</span>
+Line 1873: <span class="mono" style="cursor:pointer;" onclick="closeModal('authorizedPlatesModal')">✕</span>
+Line 2169: btn.innerText = '● ARMED';
+Line 2172: btn.innerText = '○ DISARMED';
+Line 2460: <span class="alert-meta mono">${formatLiveTimestamp(a.timestamp)} • ${escapeHtml(a.camera_id)}</span>
+Line 2804: <span>Vehicle #${v.id} • ${v.type} (${v.plate})</span>
+Line 2846: <div><div class="spec-label">Direction / Speed</div><div class="spec-val">${v.direction} • ${v.speed}</div></div>
+Line 2889: if (!ts) return 'LIVE • Just now';
+Line 2897: return `LIVE • ${timeStr} (Just now)`;
+Line 2931: <div><span style="color:var(--text-muted);">Activity & Speed:</span> <span class="mono" style="color:var(--text-primary);">${p.activity || 'Walking'} • ${p.speed_kmh || p.speed || 0} km/h</span></div>
+Line 3191: appendStreamLog('ALERT', `[${msg.data.severity}] ${msg.data.title} • ${msg.data.camera_id}: ${msg.data.message}`);
+Line 3322: <span style="cursor:pointer; color:var(--status-red); font-weight:bold; margin-left:4px;" title="Remove plate" onclick="deleteAuthorizedPlate('${p}')">✕</span>
