@@ -1,7 +1,7 @@
 # Exclude heavy local model weights, datasets, local media, and venv from Vercel deployment
+/models/
 yolov8s.pt
 yolov8n.pt
-models/
 dataset/
 evidence/
 uploads/
