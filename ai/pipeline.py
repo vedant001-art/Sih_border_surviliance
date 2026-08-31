@@ -428,16 +428,34 @@ class CameraPipeline:
             
             # Draw trajectories and motion paths for tracked targets
             for det in self.latest_detections:
+                x1, y1, x2, y2 = map(int, det["bbox"])
+                # Clamp coordinates strictly inside image bounds
+                x1 = max(0, min(w_img - 1, x1))
+                y1 = max(0, min(h_img - 1, y1))
+                x2 = max(0, min(w_img - 1, x2))
+                y2 = max(0, min(h_img - 1, y2))
+                
+                bw = x2 - x1
+                bh = y2 - y1
+                # Skip out-of-range or heavily truncated edge artifacts when vehicle exits frame
+                if bw < 20 or bh < 20:
+                    continue
+                if (x1 <= 2 and x2 < 35) or (x2 >= w_img - 3 and x1 > w_img - 35):
+                    continue
+                if (y1 <= 2 and y2 < 35) or (y2 >= h_img - 3 and y1 > h_img - 35):
+                    continue
+
                 tid = det["track_id"]
                 hist = self.motion_tracker.get_history(tid)
                 
                 if len(hist) >= 2:
-                    # Start from current target position (hist[-1]) and walk backwards in time
                     rev_hist = list(reversed(hist))
-                    valid_trail = [rev_hist[0]]
-                    for p in rev_hist[1:]:
-                        if np.hypot(p[0] - valid_trail[-1][0], p[1] - valid_trail[-1][1]) < (120 * scale):
-                            valid_trail.append(p)
+                    valid_trail = []
+                    for p in rev_hist:
+                        px = int(max(2, min(w_img - 2, p[0])))
+                        py = int(max(2, min(h_img - 2, p[1])))
+                        if not valid_trail or np.hypot(px - valid_trail[-1][0], py - valid_trail[-1][1]) < (120 * scale):
+                            valid_trail.append((px, py))
                         else:
                             break
                     
@@ -445,12 +463,9 @@ class CameraPipeline:
                         pts = np.array(valid_trail, np.int32).reshape((-1, 1, 2))
                         is_veh = det.get("is_vehicle", False)
                         trail_color = (255, 220, 0) if is_veh else (0, 255, 100)
-                        # Draw high-visibility motion trajectory path trailing behind target
                         cv2.polylines(overlay, [pts], False, trail_color, trail_thick_bg, cv2.LINE_AA)
                         cv2.polylines(annotated, [pts], False, (255, 255, 255), trail_thick_fg, cv2.LINE_AA)
                     
-                # Draw Box (full bounding box + corner brackets for maximum visibility)
-                x1, y1, x2, y2 = map(int, det["bbox"])
                 is_vehicle = det.get("is_vehicle", False)
                 color = (255, 180, 0) if is_vehicle else (0, 255, 0)
                 
@@ -465,8 +480,9 @@ class CameraPipeline:
                 cv2.line(annotated, (x2, y2), (x2-corner_len, y2), color, box_thick)
                 cv2.line(annotated, (x2, y2), (x2, y2-corner_len), color, box_thick)
                 
-                # Draw Info Panel
-                y_offset = y1 - int(10 * scale)
+                # Position Info Panel: If near top of screen (y1 < 75), render BELOW y2 to prevent box overflow off-screen!
+                draw_above = y1 >= int(75 * scale)
+                y_offset = y1 - int(10 * scale) if draw_above else y2 + int(15 * scale)
                 
                 if is_vehicle:
                     plate = self._plate_cache.get(tid, {}).get("plate", "SCANNING...")
@@ -483,21 +499,35 @@ class CameraPipeline:
                         f"{det.get('clothing', '')}"
                     ]
                     
-                for i, text in enumerate(reversed(info_lines)):
+                line_order = reversed(info_lines) if draw_above else info_lines
+                for text in line_order:
                     if not text.strip(): continue
                     (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thick)
-                    cv2.rectangle(annotated, (x1, y_offset-th-int(6*scale)), (x1+tw+int(8*scale), y_offset+int(4*scale)), (15, 18, 24), -1)
-                    cv2.rectangle(annotated, (x1, y_offset-th-int(6*scale)), (x1+tw+int(8*scale), y_offset+int(4*scale)), color, 1)
-                    cv2.putText(annotated, text, (x1+int(4*scale), y_offset-int(2*scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), font_thick)
-                    y_offset -= (th + int(10 * scale))
+                    box_x1 = max(5, min(w_img - tw - int(12 * scale), x1))
+                    box_y1 = max(5, min(h_img - th - int(10 * scale), y_offset - th - int(6 * scale))) if draw_above else max(5, min(h_img - th - int(10 * scale), y_offset))
+                    box_x2 = min(w_img - 2, box_x1 + tw + int(8 * scale))
+                    box_y2 = min(h_img - 2, box_y1 + th + int(10 * scale))
+                    
+                    cv2.rectangle(annotated, (box_x1, box_y1), (box_x2, box_y2), (15, 18, 24), -1)
+                    cv2.rectangle(annotated, (box_x1, box_y1), (box_x2, box_y2), color, 1)
+                    cv2.putText(annotated, text, (box_x1 + int(4 * scale), box_y1 + th + int(2 * scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), font_thick)
+                    if draw_above:
+                        y_offset -= (th + int(10 * scale))
+                    else:
+                        y_offset += (th + int(10 * scale))
                     
                 # Draw Plate Box if available
                 if is_vehicle and tid in self._plate_cache:
                     p_info = self._plate_cache[tid]
                     if "bbox" in p_info:
                         px1, py1, px2, py2 = p_info["bbox"]
-                        cv2.rectangle(annotated, (px1, py1), (px2, py2), (0, 165, 255), max(2, int(2*scale)))
-                        cv2.putText(annotated, "PLATE", (px1, max(0, py1 - int(5*scale))), cv2.FONT_HERSHEY_SIMPLEX, 0.5 * scale, (0, 165, 255), max(1, int(1.5*scale)))
+                        px1 = max(0, min(w_img - 1, px1))
+                        py1 = max(0, min(h_img - 1, py1))
+                        px2 = max(0, min(w_img - 1, px2))
+                        py2 = max(0, min(h_img - 1, py2))
+                        if (px2 - px1) > 10 and (py2 - py1) > 5:
+                            cv2.rectangle(annotated, (px1, py1), (px2, py2), (0, 165, 255), max(2, int(2*scale)))
+                            cv2.putText(annotated, "PLATE", (px1, max(15, py1 - int(5*scale))), cv2.FONT_HERSHEY_SIMPLEX, 0.5 * scale, (0, 165, 255), max(1, int(1.5*scale)))
 
             # Apply overlay blend for transparent fence & glowing trajectory ribbons
             cv2.addWeighted(overlay, 0.25, annotated, 0.75, 0, annotated)

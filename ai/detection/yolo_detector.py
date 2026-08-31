@@ -104,6 +104,10 @@ class YOLODetector:
                 # Determine if this is a vehicle type
                 is_vehicle = cls_id in [1, 2, 3, 5, 7]
                 
+                # Filter out severely truncated or exiting border artifacts
+                if bw < 18 or bh < 18 or x2 < 15 or y2 < 15:
+                    continue
+
                 raw_detections.append({
                     "track_id": track_id,
                     "bbox": [x1, y1, x2, y2],
