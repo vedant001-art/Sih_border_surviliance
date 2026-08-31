@@ -3,16 +3,12 @@ import torch
 from typing import List, Dict, Any
 from loguru import logger
 import os
-import threading
 
 class YOLODetector:
-    _shared_models: Dict[str, YOLO] = {}
-    _shared_lock = threading.Lock()
-
     def __init__(self, model_path: str = None, conf_thresh: float = 0.25):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # Auto-select model: prefer best.pt, yolov8s (small, accurate) over yolov8n
+        # Auto-select model: prefer best.pt, yolov8s over yolov8n
         if model_path is None:
             if os.path.exists("models/best.pt"):
                 model_path = "models/best.pt"
@@ -26,11 +22,9 @@ class YOLODetector:
         self.model_path = model_path
         self.conf_thresh = conf_thresh
 
-        with YOLODetector._shared_lock:
-            if model_path not in YOLODetector._shared_models:
-                logger.info(f"Loading YOLO model '{model_path}' on {self.device}...")
-                YOLODetector._shared_models[model_path] = YOLO(model_path)
-            self.model = YOLODetector._shared_models[model_path]
+        # Dedicated YOLO instance per detector so ByteTrack tracker state (persist=True) is independent per camera
+        logger.info(f"Initializing dedicated YOLO tracker '{model_path}' on {self.device}...")
+        self.model = YOLO(model_path)
         
         # COCO classes relevant to border surveillance
         # 0: person, 1: bicycle, 2: car, 3: motorcycle, 5: bus, 7: truck
@@ -38,12 +32,11 @@ class YOLODetector:
         self.class_names = self.model.names
         
         # Track class-specific confidence thresholds
-        # Note: Motorcycle conf is 0.45 to prevent car wheels/hoods from producing noisy motorcycle detections
         self.class_conf = {
-            0: 0.45,   # person (0.45 cleanly rejects asphalt texture / road markings)
+            0: 0.45,   # person
             1: 0.30,   # bicycle
-            2: 0.22,   # car
-            3: 0.45,   # motorcycle (high threshold eliminates noisy car parts misclassified as bikes)
+            2: 0.20,   # car (0.20 ensures all cars in frame are tracked simultaneously)
+            3: 0.40,   # motorcycle
             5: 0.25,   # bus
             7: 0.25,   # truck
         }
@@ -61,7 +54,7 @@ class YOLODetector:
             stream=False,
             verbose=False,
             device=self.device,
-            conf=0.20,             # Filter weak background noise
+            conf=0.15,             # Low confidence threshold so all vehicles in frame are detected
             iou=0.45,              # IoU threshold for NMS
             agnostic_nms=True,     # Suppress overlapping boxes regardless of class
             imgsz=640,             # Standard resolution for fast inference
@@ -98,7 +91,6 @@ class YOLODetector:
 
                 if cls_id == 0:  # person
                     # Upright humans have vertical proportions (bh >= bw * 0.95) and minimum height (bh >= 28)
-                    # Discard horizontal boxes (road lane markings, dashed stripes, pavement seams)
                     if (bh < bw * 0.95) or bh < 28 or bw < 12:
                         continue
                 elif cls_id in [1, 3]:  # bicycle or motorcycle
