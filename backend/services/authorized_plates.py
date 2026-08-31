@@ -29,27 +29,40 @@ class AuthorizedPlatesService:
         self._load()
 
     def _load(self):
-        os.makedirs(DATA_DIR, exist_ok=True)
-        if not os.path.exists(PLATES_FILE):
-            self.plates = set(DEFAULT_PLATES)
-            self._save()
-        else:
+        try:
+            target_dir = "/tmp/data" if os.getenv("VERCEL") else DATA_DIR
+            target_file = os.path.join(target_dir, "authorized_plates.json")
             try:
-                with open(PLATES_FILE, "r", encoding="utf-8") as f:
+                os.makedirs(target_dir, exist_ok=True)
+            except Exception:
+                pass
+                
+            if not os.path.exists(target_file) and os.path.exists(PLATES_FILE):
+                target_file = PLATES_FILE
+                
+            if os.path.exists(target_file):
+                with open(target_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.plates = set(normalize_plate(p) for p in data if p)
                 logger.info(f"Loaded {len(self.plates)} authorized plates from storage.")
-            except Exception as e:
-                logger.error(f"Failed to read {PLATES_FILE}, using defaults: {e}")
+            else:
                 self.plates = set(DEFAULT_PLATES)
+        except Exception as e:
+            logger.warning(f"Failed to load authorized plates, using defaults: {e}")
+            self.plates = set(DEFAULT_PLATES)
 
     def _save(self):
         try:
-            os.makedirs(DATA_DIR, exist_ok=True)
-            with open(PLATES_FILE, "w", encoding="utf-8") as f:
+            target_dir = "/tmp/data" if os.getenv("VERCEL") else DATA_DIR
+            target_file = os.path.join(target_dir, "authorized_plates.json")
+            try:
+                os.makedirs(target_dir, exist_ok=True)
+            except Exception:
+                pass
+            with open(target_file, "w", encoding="utf-8") as f:
                 json.dump(sorted(list(self.plates)), f, indent=2)
         except Exception as e:
-            logger.error(f"Failed to save authorized plates: {e}")
+            logger.warning(f"Failed to save authorized plates: {e}")
 
     def is_authorized(self, plate_text: str) -> bool:
         """

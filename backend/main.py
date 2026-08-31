@@ -42,13 +42,29 @@ app.include_router(websocket_routes.router)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 INDEX_PATH = os.path.join(STATIC_DIR, "index.html")
-EVIDENCE_DIR = os.path.abspath("evidence")
+EVIDENCE_DIR = "/tmp/evidence" if os.getenv("VERCEL") else os.path.abspath("evidence")
 
-os.makedirs(STATIC_DIR, exist_ok=True)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+try:
+    os.makedirs(STATIC_DIR, exist_ok=True)
+except Exception:
+    pass
 
-os.makedirs(EVIDENCE_DIR, exist_ok=True)
-app.mount("/evidence", StaticFiles(directory=EVIDENCE_DIR), name="evidence")
+try:
+    os.makedirs(EVIDENCE_DIR, exist_ok=True)
+except Exception:
+    pass
+
+if os.path.exists(STATIC_DIR):
+    try:
+        app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    except Exception:
+        pass
+
+if os.path.exists(EVIDENCE_DIR):
+    try:
+        app.mount("/evidence", StaticFiles(directory=EVIDENCE_DIR), name="evidence")
+    except Exception:
+        pass
 
 @app.get("/")
 @app.get("/dashboard")
