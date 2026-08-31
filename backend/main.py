@@ -21,13 +21,17 @@ app = FastAPI(
 )
 
 # Configure CORS
+cors_origins_env = os.getenv("CORS_ORIGINS")
+allowed_origins = [o.strip() for o in cors_origins_env.split(",")] if cors_origins_env else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins for development
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse

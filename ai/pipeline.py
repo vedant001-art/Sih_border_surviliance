@@ -34,6 +34,13 @@ class CameraPipeline:
         
         self.face_recognizer = FaceRecognizer()
         self.anpr_system = ANPRSystem()
+        from ai.detection.plate_detector import PlateDetector
+        import concurrent.futures
+        import os
+        self.plate_detector = PlateDetector()
+        self.anpr_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        os.makedirs("evidence/plates", exist_ok=True)
+        os.makedirs("evidence/vehicles", exist_ok=True)
         
         self.running = False
         self.ai_thread = None
@@ -226,17 +233,7 @@ class CameraPipeline:
             self.motion_tracker.cleanup(frame_count)
             self._evaluate_rules(enhanced_detections, frame)
 
-            # 2. ANPR Processing
-            from ai.detection.plate_detector import PlateDetector
             from backend.services.anpr_fusion import anpr_fusion
-            import os
-            import concurrent.futures
-            
-            if not hasattr(self, 'plate_detector'):
-                self.plate_detector = PlateDetector()
-                self.anpr_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-                os.makedirs("evidence/plates", exist_ok=True)
-                os.makedirs("evidence/vehicles", exist_ok=True)
                 
             def process_anpr_async(det, frame, now):
                 tid = det["track_id"]
@@ -281,11 +278,17 @@ class CameraPipeline:
                             cache_entry = {
                                 "plate": final_text,
                                 "conf": fused_plate["confidence"],
+                                "is_valid": fused_plate.get("is_valid", False),
                                 "last_seen": now
                             }
                             if plate_det and "bbox" in plate_det:
                                 cache_entry["bbox"] = plate_det["bbox"]
-                            self._plate_cache[tid] = cache_entry
+                                
+                            # Always keep highest confidence or valid plate reading in cache
+                            old_cache = self._plate_cache.get(tid)
+                            if not old_cache or fused_plate["confidence"] >= old_cache.get("conf", 0) or (fused_plate.get("is_valid") and not old_cache.get("is_valid")):
+                                self._plate_cache[tid] = cache_entry
+
                             g_ent = entity_registry.entities.get(g_id)
                             if g_ent:
                                 g_ent.update({"plate": final_text, "class_name": "car", "type": "Car"})
@@ -297,7 +300,7 @@ class CameraPipeline:
                                 
                             # Save evidence image
                             plate_img_path = ""
-                            if fused_plate["confidence"] > 0.35:
+                            if fused_plate["confidence"] > 0.30:
                                 plate_img_path = f"evidence/plates/plate_{self.camera_id}_T{tid}_{int(now)}.jpg"
                                 cv2.imwrite(plate_img_path, fused_plate["best_crop"])
                                 veh_img_path = f"evidence/vehicles/veh_{self.camera_id}_T{tid}_{int(now)}.jpg"
@@ -319,8 +322,9 @@ class CameraPipeline:
             for det in enhanced_detections:
                 if det.get("is_vehicle", False):
                     tid = det["track_id"]
-                    # Skip OCR if plate is already confirmed with good confidence
-                    if tid in self._plate_cache and self._plate_cache[tid].get("conf", 0) >= 0.35:
+                    cached = self._plate_cache.get(tid)
+                    # Only skip OCR if plate is confirmed with HIGH confidence and valid format
+                    if cached and cached.get("is_valid") and cached.get("conf", 0) >= 0.75:
                         continue
                     if anpr_fusion.can_run_ocr(tid):
                         anpr_fusion.last_ocr_time[tid] = now
@@ -609,6 +613,11 @@ class CameraPipeline:
                 self.intrusion_alert_cache[tid] = now
 
                 if is_veh:
+                    if tid not in self.zone_entry_times:
+                        self.zone_entry_times[tid] = now
+                        
+                    entry_elapsed = now - self.zone_entry_times[tid]
+
                     # 1. If this track is already confirmed authorized, SUPPRESS!
                     if tid in self.authorized_tracks:
                         logger.info(f"[{self.camera_id}] Track #{tid} is pre-authorized. Alert SUPPRESSED.")
@@ -626,6 +635,10 @@ class CameraPipeline:
                     if plate and authorized_plates.is_authorized(plate):
                         self.authorized_tracks.add(tid)
                         logger.info(f"[{self.camera_id}] Authorized vehicle {cls_name.upper()} #{tid} (Plate: {plate}) entered {zone} - Alert SUPPRESSED.")
+                        continue
+
+                    # 4. Grace period: If plate is not yet read and vehicle entered < 1.5s ago, wait for ANPR OCR thread
+                    if not plate and entry_elapsed < 1.5:
                         continue
 
                     # 4. Trigger alert for unauthorized or unregistered vehicle breach

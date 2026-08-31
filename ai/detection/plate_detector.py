@@ -70,7 +70,7 @@ class PlateDetector:
         results = self.model.predict(
             inference_img,
             device=self.device,
-            conf=0.15,
+            conf=min(0.12, self.conf_thresh),
             iou=0.45,
             imgsz=640,
             verbose=False
@@ -101,8 +101,22 @@ class PlateDetector:
         gx2 = int(x2_local + global_offset_x)
         gy2 = int(y2_local + global_offset_y)
         
+        # Add 8% horizontal and 12% vertical padding around plate to avoid cutting characters
+        vh, vw = vehicle_crop.shape[:2]
+        bw = x2_local - x1_local
+        bh = y2_local - y1_local
+        pad_x = max(4, int(bw * 0.08))
+        pad_y = max(4, int(bh * 0.12))
+
+        crop_x1 = max(0, int(x1_local - pad_x))
+        crop_y1 = max(0, int(y1_local - pad_y))
+        crop_x2 = min(vw, int(x2_local + pad_x))
+        crop_y2 = min(vh, int(y2_local + pad_y))
+        
+        plate_crop = vehicle_crop[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+        
         return {
             "bbox": [gx1, gy1, gx2, gy2],
             "confidence": best_conf,
-            "crop": vehicle_crop[int(y1_local):int(y2_local), int(x1_local):int(x2_local)].copy()
+            "crop": plate_crop
         }

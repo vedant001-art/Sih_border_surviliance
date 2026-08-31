@@ -10,6 +10,8 @@ numpy
 opencv-python-headless
 shapely
 passlib[bcrypt]
-python-jose[cryptography]
 requests
 websockets
+psycopg2-binary
+
+

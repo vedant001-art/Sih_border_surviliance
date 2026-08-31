@@ -59,7 +59,7 @@ class ANPRSystem:
             return ""
         # If standard Indian format: 2 letters, 2 digits, 1-2 letters, 4 digits
         if len(cleaned) in [9, 10]:
-            char_to_num = {'O': '0', 'I': '1', 'Z': '2', 'S': '5', 'B': '8', 'G': '6'}
+            char_to_num = {'O': '0', 'I': '1', 'Z': '2', 'S': '5', 'B': '8', 'G': '6', 'A': '4', 'T': '7'}
             num_to_char = {'0': 'O', '1': 'I', '2': 'Z', '5': 'S', '8': 'B', '6': 'G'}
             chars = list(cleaned)
             # State code: first 2 should be letters
@@ -75,6 +75,17 @@ class ANPRSystem:
                 if chars[i] in char_to_num:
                     chars[i] = char_to_num[chars[i]]
             return "".join(chars)
+        elif len(cleaned) in [7, 8]:
+            char_to_num = {'O': '0', 'I': '1', 'Z': '2', 'S': '5', 'B': '8', 'G': '6', 'A': '4'}
+            num_to_char = {'0': 'O', '1': 'I', '2': 'Z', '5': 'S', '8': 'B', '6': 'G'}
+            chars = list(cleaned)
+            for i in range(min(2, len(chars))):
+                if chars[i] in num_to_char:
+                    chars[i] = num_to_char[chars[i]]
+            for i in range(max(2, len(chars) - 4), len(chars)):
+                if chars[i] in char_to_num:
+                    chars[i] = char_to_num[chars[i]]
+            return "".join(chars)
         return cleaned
 
     def clean_plate_text(self, text: str) -> str:
@@ -83,7 +94,7 @@ class ANPRSystem:
         
     def read_plate(self, img) -> dict:
         """
-        Runs multi-pass OCR on raw and CLAHE-enhanced plate crop.
+        Runs optimized multi-pass OCR on raw, CLAHE-enhanced, and denoised plate crops.
         Returns a dict: {'raw_text': str, 'normalized_text': str, 'confidence': float, 'is_valid': bool}
         """
         if not self.enabled or img is None or img.size == 0:
@@ -91,11 +102,13 @@ class ANPRSystem:
             
         try:
             h, w = img.shape[:2]
-            # Multi-pass: test enhanced upscaled image first, then raw image
+            if h < 10 or w < 15:
+                return None
+
             passes = []
             
-            # Pass 1: Upscaled + CLAHE contrast enhancement (converted to 3-channel BGR for EasyOCR)
-            scale = max(90.0 / max(h, 1), 2.5)
+            # Pass 1: Upscaled + CLAHE contrast enhancement
+            scale = max(90.0 / max(h, 1), 2.2)
             if scale > 1.0:
                 upscaled = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
             else:
@@ -106,20 +119,21 @@ class ANPRSystem:
             enhanced_gray = clahe.apply(gray)
             enhanced_bgr = cv2.cvtColor(enhanced_gray, cv2.COLOR_GRAY2BGR)
             
-            # Pass 2: Otsu Binary Thresholding (converted to 3-channel BGR)
-            _, otsu_gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            otsu_bgr = cv2.cvtColor(otsu_gray, cv2.COLOR_GRAY2BGR)
+            # Pass 2: Bilateral Denoising (preserves sharp character edges)
+            denoised_gray = cv2.bilateralFilter(gray, 9, 75, 75)
+            denoised_bgr = cv2.cvtColor(denoised_gray, cv2.COLOR_GRAY2BGR)
             
             passes.append(enhanced_bgr)
-            passes.append(otsu_bgr)
             passes.append(upscaled)
+            passes.append(denoised_bgr)
             passes.append(img)
             
             best_candidate = None
             best_score = -1.0
+            allowlist = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
             
             for pass_img in passes:
-                results = self.ocr.readtext(pass_img)
+                results = self.ocr.readtext(pass_img, allowlist=allowlist, paragraph=False)
                 if not results:
                     continue
                     
@@ -148,6 +162,9 @@ class ANPRSystem:
                             'confidence': float(round(avg_prob, 2)),
                             'is_valid': is_ind
                         }
+                        # Early exit if we get a high confidence valid Indian plate
+                        if is_ind and avg_prob >= 0.50 and len(normalized) >= 7:
+                            break
                         
             return best_candidate
             
