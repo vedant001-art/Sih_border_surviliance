@@ -61,6 +61,7 @@ class CameraPipeline:
         self._pending_fence_update = None
         self.virtual_fence_enabled = True
         self.approaching_alert_cache = {}
+        self.intrusion_alert_cache = {}
 
     @property
     def actual_fps(self):
@@ -602,6 +603,11 @@ class CameraPipeline:
                     })
                     continue
                 
+                # Check 10-second cooldown per target ID to prevent duplicate alert flooding
+                if now - self.intrusion_alert_cache.get(tid, 0) < 10.0:
+                    continue
+                self.intrusion_alert_cache[tid] = now
+
                 if is_veh:
                     # 1. If this track is already confirmed authorized, SUPPRESS!
                     if tid in self.authorized_tracks:
