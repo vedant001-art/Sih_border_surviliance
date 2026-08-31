@@ -437,34 +437,33 @@ class CameraPipeline:
                 
                 bw = x2 - x1
                 bh = y2 - y1
-                # Skip out-of-range or heavily truncated edge artifacts when vehicle exits frame
-                if bw < 20 or bh < 20:
-                    continue
-                if (x1 <= 2 and x2 < 35) or (x2 >= w_img - 3 and x1 > w_img - 35):
-                    continue
-                if (y1 <= 2 and y2 < 35) or (y2 >= h_img - 3 and y1 > h_img - 35):
+                if bw < 10 or bh < 10:
                     continue
 
                 tid = det["track_id"]
                 hist = self.motion_tracker.get_history(tid)
+                is_veh = det.get("is_vehicle", False)
+                trail_color = (255, 220, 0) if is_veh else (0, 255, 100)
                 
-                if len(hist) >= 2:
+                if len(hist) >= 1:
                     rev_hist = list(reversed(hist))
                     valid_trail = []
                     for p in rev_hist:
                         px = int(max(2, min(w_img - 2, p[0])))
                         py = int(max(2, min(h_img - 2, p[1])))
-                        if not valid_trail or np.hypot(px - valid_trail[-1][0], py - valid_trail[-1][1]) < (120 * scale):
+                        if not valid_trail or np.hypot(px - valid_trail[-1][0], py - valid_trail[-1][1]) < (150 * scale):
                             valid_trail.append((px, py))
                         else:
                             break
                     
                     if len(valid_trail) >= 2:
                         pts = np.array(valid_trail, np.int32).reshape((-1, 1, 2))
-                        is_veh = det.get("is_vehicle", False)
-                        trail_color = (255, 220, 0) if is_veh else (0, 255, 100)
                         cv2.polylines(overlay, [pts], False, trail_color, trail_thick_bg, cv2.LINE_AA)
                         cv2.polylines(annotated, [pts], False, (255, 255, 255), trail_thick_fg, cv2.LINE_AA)
+                    
+                    if len(valid_trail) >= 1:
+                        cv2.circle(overlay, valid_trail[-1], max(4, int(5 * scale)), trail_color, -1)
+                        cv2.circle(annotated, valid_trail[0], max(4, int(5 * scale)), (255, 255, 255), -1)
                     
                 is_vehicle = det.get("is_vehicle", False)
                 color = (255, 180, 0) if is_vehicle else (0, 255, 0)

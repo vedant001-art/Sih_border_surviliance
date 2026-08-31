@@ -425,6 +425,8 @@
             border: 1px solid var(--border-subtle);
             border-radius: 4px;
             overflow-x: auto;
+            min-height: 56px;
+            align-items: center;
         }
 
         .summary-block {
@@ -434,7 +436,9 @@
             border-right: 1px solid var(--border-subtle);
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            justify-content: center;
+            gap: 3px;
+            box-sizing: border-box;
         }
 
         .summary-block:last-child { border-right: none; }
@@ -445,13 +449,18 @@
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            line-height: 1.2;
+            white-space: nowrap;
         }
 
         .summary-value {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             color: var(--text-primary);
             font-family: 'JetBrains Mono', monospace;
+            line-height: 1.2;
+            display: block;
+            white-space: nowrap;
         }
 
         .summary-value.warn { color: var(--status-amber); }

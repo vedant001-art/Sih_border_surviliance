@@ -113,8 +113,8 @@ class YOLODetector:
                 # Determine if this is a vehicle type
                 is_vehicle = cls_id in [1, 2, 3, 5, 7]
                 
-                # Filter out severely truncated or exiting border artifacts
-                if bw < 18 or bh < 18 or x2 < 15 or y2 < 15:
+                # Filter out microscopic noise (allow immediate tracking as soon as object enters frame)
+                if bw < 10 or bh < 10:
                     continue
 
                 raw_detections.append({
