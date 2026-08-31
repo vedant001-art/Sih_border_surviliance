@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
+import time
 import shutil
 from datetime import datetime
 import json
@@ -53,6 +54,27 @@ def _ensure_camera_in_db(camera_id: str, name: str = None, location: str = None)
             db.commit()
     except Exception as e:
         db.rollback()
+    finally:
+        db.close()
+
+def _ensure_camera_in_db(camera_id: str, name: str = None, location: str = None):
+    db = SessionLocal()
+    try:
+        cam = db.query(Camera).filter(Camera.id == camera_id).first()
+        if not cam:
+            cam = Camera(
+                id=camera_id,
+                name=name or f"Camera {camera_id}",
+                location_name=location or f"Sector {camera_id}",
+                status="ONLINE",
+                stream_url="VIDEO_FILE",
+                created_at=datetime.now()
+            )
+            db.add(cam)
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error ensuring camera in DB: {e}")
     finally:
         db.close()
 
