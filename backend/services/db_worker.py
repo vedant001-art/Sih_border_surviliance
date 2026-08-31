@@ -54,7 +54,7 @@ class DBWorker:
                 self._handle_save_position(db, data)
             elif task_type == "SAVE_ANPR":
                 self._handle_save_anpr(db, data)
-            elif task_type == "CREATE_EVENT":
+            elif task_type in ["CREATE_EVENT", "CREATE_ALERT"]:
                 self._handle_create_event(db, data)
             db.commit()
         except Exception as e:
