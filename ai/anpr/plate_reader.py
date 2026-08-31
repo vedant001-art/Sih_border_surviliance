@@ -94,17 +94,25 @@ class ANPRSystem:
             # Multi-pass: test enhanced upscaled image first, then raw image
             passes = []
             
-            # Pass 1: Upscaled + CLAHE contrast enhancement
-            scale = max(70.0 / max(h, 1), 2.0)
+            # Pass 1: Upscaled + CLAHE contrast enhancement (converted to 3-channel BGR for EasyOCR)
+            scale = max(90.0 / max(h, 1), 2.5)
             if scale > 1.0:
                 upscaled = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
             else:
                 upscaled = img.copy()
                 
             gray = cv2.cvtColor(upscaled, cv2.COLOR_BGR2GRAY) if len(upscaled.shape) == 3 else upscaled
-            clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-            enhanced = clahe.apply(gray)
-            passes.append(enhanced)
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            enhanced_gray = clahe.apply(gray)
+            enhanced_bgr = cv2.cvtColor(enhanced_gray, cv2.COLOR_GRAY2BGR)
+            
+            # Pass 2: Otsu Binary Thresholding (converted to 3-channel BGR)
+            _, otsu_gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            otsu_bgr = cv2.cvtColor(otsu_gray, cv2.COLOR_GRAY2BGR)
+            
+            passes.append(enhanced_bgr)
+            passes.append(otsu_bgr)
+            passes.append(upscaled)
             passes.append(img)
             
             best_candidate = None

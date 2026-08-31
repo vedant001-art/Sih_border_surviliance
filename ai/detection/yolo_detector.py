@@ -36,7 +36,7 @@ class YOLODetector:
         self.class_conf = {
             0: 0.40,   # person
             1: 0.30,   # bicycle
-            2: 0.18,   # car (0.18 ensures all vehicles in frame are detected & tracked)
+            2: 0.18,   # car
             3: 0.35,   # motorcycle
             5: 0.25,   # bus
             7: 0.25,   # truck
@@ -44,6 +44,7 @@ class YOLODetector:
         
         self._fallback_id_counter = 1
         self._last_centers: Dict[int, tuple] = {}
+        self._smoothed_boxes: Dict[int, tuple] = {}
 
     def _assign_fallback_track_id(self, cx: float, cy: float) -> int:
         best_id = None
@@ -64,8 +65,8 @@ class YOLODetector:
     @torch.inference_mode()
     def detect_and_track(self, frame) -> List[Dict[str, Any]]:
         """
-        Runs YOLO detection and tracking on a single frame with agnostic NMS and geometric rectification.
-        Guarantees that every detected object receives a valid track ID.
+        Runs YOLO detection and tracking on a single frame with agnostic NMS,
+        geometric rectification, and EMA bounding box smoothing for rock-solid tracking.
         """
         results = self.model.track(
             frame,
@@ -163,5 +164,31 @@ class YOLODetector:
                 if contained_in_car:
                     continue
             final_detections.append(d)
+
+        # EMA Bounding Box Smoothing per Track ID for rock-solid, jitter-free target tracking
+        smoothed_detections = []
+        alpha = 0.65  # Weight for new frame detection vs historical position
+        active_tids = set()
+        for d in final_detections:
+            tid = d["track_id"]
+            active_tids.add(tid)
+            nx1, ny1, nx2, ny2 = d["bbox"]
+            if tid in self._smoothed_boxes:
+                ox1, oy1, ox2, oy2 = self._smoothed_boxes[tid]
+                sx1 = alpha * nx1 + (1 - alpha) * ox1
+                sy1 = alpha * ny1 + (1 - alpha) * oy1
+                sx2 = alpha * nx2 + (1 - alpha) * ox2
+                sy2 = alpha * ny2 + (1 - alpha) * oy2
+            else:
+                sx1, sy1, sx2, sy2 = nx1, ny1, nx2, ny2
+            
+            self._smoothed_boxes[tid] = (sx1, sy1, sx2, sy2)
+            d["bbox"] = [sx1, sy1, sx2, sy2]
+            smoothed_detections.append(d)
+
+        # Cleanup lost tracks
+        lost_tids = [t for t in self._smoothed_boxes if t not in active_tids]
+        for t in lost_tids:
+            del self._smoothed_boxes[t]
                 
-        return final_detections
+        return smoothed_detections
