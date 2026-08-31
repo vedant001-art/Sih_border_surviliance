@@ -3,12 +3,16 @@ import torch
 from typing import List, Dict, Any
 from loguru import logger
 import os
+import threading
 
 class YOLODetector:
+    _shared_models: Dict[str, YOLO] = {}
+    _shared_lock = threading.Lock()
+
     def __init__(self, model_path: str = None, conf_thresh: float = 0.25):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # Auto-select model: prefer yolov8s (small, more accurate) over yolov8n (nano)
+        # Auto-select model: prefer best.pt, yolov8s (small, accurate) over yolov8n
         if model_path is None:
             if os.path.exists("models/best.pt"):
                 model_path = "models/best.pt"
@@ -17,11 +21,16 @@ class YOLODetector:
             elif os.path.exists("yolov8n.pt"):
                 model_path = "yolov8n.pt"
             else:
-                model_path = "yolov8n.pt"  # Will auto-download
+                model_path = "yolov8n.pt"
         
-        logger.info(f"Loading YOLO model '{model_path}' on {self.device}...")
-        self.model = YOLO(model_path)
+        self.model_path = model_path
         self.conf_thresh = conf_thresh
+
+        with YOLODetector._shared_lock:
+            if model_path not in YOLODetector._shared_models:
+                logger.info(f"Loading YOLO model '{model_path}' on {self.device}...")
+                YOLODetector._shared_models[model_path] = YOLO(model_path)
+            self.model = YOLODetector._shared_models[model_path]
         
         # COCO classes relevant to border surveillance
         # 0: person, 1: bicycle, 2: car, 3: motorcycle, 5: bus, 7: truck

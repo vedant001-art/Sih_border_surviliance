@@ -21,7 +21,7 @@ print(f"✓ Model saves directory: {SAVE_DIR}")
 
 # Step 2: Install dependencies
 print("\n--- Step 2: Installing Dependencies ---")
-!pip install --quiet ultralytics roboflow
+os.system("pip install --quiet ultralytics roboflow")
 
 # Step 3: Download Verified Public License Plate Dataset
 print("\n--- Step 3: Downloading License Plate Dataset ---")
@@ -40,8 +40,8 @@ try:
     print(f"✓ Dataset successfully downloaded to: {dataset.location}")
 except Exception as e:
     print(f"Roboflow download encountered issue ({e}). Downloading direct verified zip...")
-    !curl -L -o /content/license_plates.zip "https://universe.roboflow.com/ds/7xV1yLw1v2?key=mJUn86YkWsBpCxhhuLSn" || true
-    !unzip -q /content/license_plates.zip -d /content/dataset || true
+    os.system('curl -L -o /content/license_plates.zip "https://universe.roboflow.com/ds/7xV1yLw1v2?key=mJUn86YkWsBpCxhhuLSn"')
+    os.system('unzip -q /content/license_plates.zip -d /content/dataset')
     data_yaml_path = "/content/dataset/data.yaml"
 
 # Step 4: Fine-tune YOLOv8 on T4 GPU

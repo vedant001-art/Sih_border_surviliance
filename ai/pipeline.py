@@ -542,6 +542,9 @@ class CameraPipeline:
             for i, line in enumerate(metrics):
                 cv2.putText(annotated, line, (10, 25 + i * 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
 
+            ret, buf = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            if ret:
+                self.rendered_jpeg_bytes = buf.tobytes()
             self.rendered_frame = annotated
             
             frames_rendered += 1

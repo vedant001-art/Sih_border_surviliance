@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
+import threading
 from loguru import logger
+
 try:
     from insightface.app import FaceAnalysis
 except ImportError:
@@ -8,16 +10,22 @@ except ImportError:
     logger.warning("InsightFace not installed. Face recognition disabled.")
 
 class FaceRecognizer:
+    _shared_app = None
     _shared_known_faces = {}
-    
+    _shared_lock = threading.Lock()
+
     def __init__(self, threshold: float = 0.5):
         self.threshold = threshold
-        self.app = None
-        if FaceAnalysis:
-            # Initialize InsightFace with buffalo_l (includes SCRFD and ArcFace)
-            self.app = FaceAnalysis(name='buffalo_l', root='~/.insightface')
-            self.app.prepare(ctx_id=0, det_size=(640, 640))
-            logger.info("InsightFace FaceAnalysis initialized")
+        if FaceAnalysis and FaceRecognizer._shared_app is None:
+            with FaceRecognizer._shared_lock:
+                if FaceRecognizer._shared_app is None:
+                    try:
+                        FaceRecognizer._shared_app = FaceAnalysis(name='buffalo_l', root='~/.insightface')
+                        FaceRecognizer._shared_app.prepare(ctx_id=0, det_size=(640, 640))
+                        logger.info("InsightFace FaceAnalysis initialized")
+                    except Exception as e:
+                        logger.error(f"Failed to initialize InsightFace: {e}")
+        self.app = FaceRecognizer._shared_app
 
     @property
     def known_faces(self):

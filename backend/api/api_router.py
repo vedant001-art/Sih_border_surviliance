@@ -229,19 +229,20 @@ def generate_frames(camera_id: str):
             time.sleep(0.3)
             continue
             
-        frame = pipeline.rendered_frame
-        if frame is None:
-            time.sleep(0.03)
-            continue
+        jpeg_bytes = getattr(pipeline, 'rendered_jpeg_bytes', None)
+        if jpeg_bytes is None:
+            frame = pipeline.rendered_frame
+            if frame is None:
+                time.sleep(0.03)
+                continue
+            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            if not ret:
+                time.sleep(0.03)
+                continue
+            jpeg_bytes = buffer.tobytes()
             
-        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-        if not ret:
-            time.sleep(0.03)
-            continue
-            
-        frame_bytes = buffer.tobytes()
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + jpeg_bytes + b'\r\n')
         time.sleep(0.033)
 
 @router.get("/cameras/{camera_id}/feed")

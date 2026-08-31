@@ -4,9 +4,13 @@ from loguru import logger
 import os
 import cv2
 import numpy as np
+import threading
 from typing import Optional, Dict, Any
 
 class PlateDetector:
+    _shared_models: Dict[str, YOLO] = {}
+    _shared_lock = threading.Lock()
+
     def __init__(self, model_path: str = None, conf_thresh: float = None):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
@@ -31,11 +35,13 @@ class PlateDetector:
         self.model = None
         self.enabled = False
         
-        # Check if model exists
         if os.path.exists(model_path):
             try:
-                logger.info(f"Loading Plate YOLO model '{model_path}' (conf={self.conf_thresh}) on {self.device}...")
-                self.model = YOLO(model_path)
+                with PlateDetector._shared_lock:
+                    if model_path not in PlateDetector._shared_models:
+                        logger.info(f"Loading Plate YOLO model '{model_path}' (conf={self.conf_thresh}) on {self.device}...")
+                        PlateDetector._shared_models[model_path] = YOLO(model_path)
+                    self.model = PlateDetector._shared_models[model_path]
                 self.enabled = True
             except Exception as e:
                 logger.error(f"Failed to load plate model: {e}")

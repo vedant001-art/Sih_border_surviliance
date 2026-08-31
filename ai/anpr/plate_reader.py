@@ -4,17 +4,25 @@ import re
 import cv2
 import easyocr
 import numpy as np
+import threading
 
 class ANPRSystem:
+    _shared_ocr = None
+    _shared_ocr_lock = threading.Lock()
+
     def __init__(self):
         self.enabled = True
-        try:
-            logger.info("Loading EasyOCR for ANPR...")
-            # Use easyocr instead of PaddleOCR. gpu=False because this user runs on CPU only.
-            self.ocr = easyocr.Reader(['en'], gpu=False)
-            logger.info("EasyOCR loaded for ANPR")
-        except Exception as e:
-            logger.error(f"Failed to load EasyOCR: {e}")
+        if ANPRSystem._shared_ocr is None:
+            with ANPRSystem._shared_ocr_lock:
+                if ANPRSystem._shared_ocr is None:
+                    try:
+                        logger.info("Loading EasyOCR for ANPR...")
+                        ANPRSystem._shared_ocr = easyocr.Reader(['en'], gpu=False)
+                        logger.info("EasyOCR loaded for ANPR")
+                    except Exception as e:
+                        logger.error(f"Failed to load EasyOCR: {e}")
+        self.ocr = ANPRSystem._shared_ocr
+        if not self.ocr:
             self.enabled = False
 
     def validate_indian_plate(self, text: str) -> bool:
