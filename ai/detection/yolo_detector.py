@@ -40,12 +40,12 @@ class YOLODetector:
         # Track class-specific confidence thresholds
         # Note: Motorcycle conf is 0.45 to prevent car wheels/hoods from producing noisy motorcycle detections
         self.class_conf = {
-            0: 0.45,   # person (0.45 cleanly rejects asphalt texture / road markings)
-            1: 0.30,   # bicycle
-            2: 0.22,   # car
-            3: 0.45,   # motorcycle (high threshold eliminates noisy car parts misclassified as bikes)
-            5: 0.25,   # bus
-            7: 0.25,   # truck
+            0: 0.22,   # person (0.22 ensures all real people are framed)
+            1: 0.22,   # bicycle
+            2: 0.20,   # car
+            3: 0.30,   # motorcycle
+            5: 0.20,   # bus
+            7: 0.20,   # truck
         }
 
     def detect_and_track(self, frame) -> List[Dict[str, Any]]:
@@ -62,7 +62,7 @@ class YOLODetector:
             stream=False,
             verbose=False,
             device=self.device,
-            conf=0.20,             # Filter weak background noise
+            conf=0.18,             # Filter weak background noise
             iou=0.45,              # IoU threshold for NMS
             agnostic_nms=True,     # Suppress overlapping boxes regardless of class
             imgsz=640,             # Standard resolution for fast inference
@@ -98,9 +98,8 @@ class YOLODetector:
                 area = bw * bh
 
                 if cls_id == 0:  # person
-                    # Upright humans have vertical proportions (bh >= bw * 0.95) and minimum height (bh >= 28)
-                    # Discard horizontal boxes (road lane markings, dashed stripes, pavement seams)
-                    if (bh < bw * 0.95) or bh < 28 or bw < 12:
+                    # Filter ground texture artifacts: require minimum height bh >= 14 and aspect ratio bh >= bw * 0.55
+                    if (bh < bw * 0.55) or bh < 14:
                         continue
                 elif cls_id in [1, 3]:  # bicycle or motorcycle
                     if bw > 175 or area > 32000 or aspect > 1.15:
