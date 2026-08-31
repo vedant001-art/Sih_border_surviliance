@@ -33,10 +33,6 @@ class ConnectionManager:
         if client_id in self.active_connections:
             del self.active_connections[client_id]
             logger.info(f"WebSocket Client {client_id} disconnected")
-            # If all clients disconnected (e.g. WiFi off / offline), switch queue to buffering mode
-            if len(self.active_connections) == 0:
-                from backend.services.offline_alert_queue import offline_alert_queue
-                offline_alert_queue.set_connection_status(False)
 
     async def send_personal_message(self, message: str, client_id: str):
         if client_id in self.active_connections:

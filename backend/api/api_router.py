@@ -267,7 +267,7 @@ async def generate_frames(camera_id: str):
             last_frame_counter = cur_counter
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + jpeg_bytes + b'\r\n')
-        await asyncio.sleep(0.015)
+        await asyncio.sleep(0.001)
 
 @router.get("/cameras/{camera_id}/feed")
 async def video_feed(camera_id: str):
@@ -513,7 +513,7 @@ def get_event(event_id: int):
         db.close()
 
 @router.get("/alerts")
-def get_alerts(limit: int = 50, offset: int = 0):
+async def get_alerts(limit: int = 50, offset: int = 0):
     db = SessionLocal()
     try:
         from backend.models.schema import Track, Vehicle
@@ -557,11 +557,8 @@ def get_alerts(limit: int = 50, offset: int = 0):
                 if track:
                     veh = db.query(Vehicle).filter(Vehicle.camera_id == track.camera_id, Vehicle.track_id == track.id).first()
                 plate_str = (veh.plate_number if veh and veh.plate_number else None) or details.get("plate")
-                if not plate_str or plate_str in ["UNREGISTERED/UNKNOWN", "UNREADABLE"]:
-                    try:
-                        plate_str = f"IND-P{int(local_tid):04d}"
-                    except Exception:
-                        plate_str = "IND-P0001"
+                if not plate_str or plate_str in ["UNREGISTERED/UNKNOWN"]:
+                    plate_str = "UNREADABLE"
 
                 vehicle_info = {
                     "plate": plate_str,

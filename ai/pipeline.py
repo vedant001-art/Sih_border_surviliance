@@ -514,11 +514,11 @@ class CameraPipeline:
             for i, line in enumerate(metrics):
                 cv2.putText(annotated, line, (10, 25 + i * 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
 
-            # Ultra-fast JPEG encoding for web stream
+            # Ultra-fast JPEG encoding for web stream (960px max width @ quality 50)
             encode_img = annotated
-            if w_img > 1280:
-                encode_img = cv2.resize(annotated, (1280, int(h_img * (1280.0 / w_img))), interpolation=cv2.INTER_NEAREST)
-            ret, buf = cv2.imencode('.jpg', encode_img, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            if w_img > 960:
+                encode_img = cv2.resize(annotated, (960, int(h_img * (960.0 / w_img))), interpolation=cv2.INTER_NEAREST)
+            ret, buf = cv2.imencode('.jpg', encode_img, [cv2.IMWRITE_JPEG_QUALITY, 50])
             if ret:
                 self.rendered_jpeg_bytes = buf.tobytes()
                 self.rendered_frame_counter += 1
@@ -530,7 +530,7 @@ class CameraPipeline:
                 start_time = time.time()
                 frames_rendered = 0
 
-            time.sleep(0.005)
+            time.sleep(0.001)
 
     def _evaluate_rules(self, detections, frame):
         # Only produce alerts when Virtual Fence feature is enabled
